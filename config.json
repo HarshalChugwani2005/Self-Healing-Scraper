@@ -1,0 +1,5 @@
+{
+  "collector_id": "c_msz0bfd7278l5fdm1h",
+  "target_url": "https://www.freejobalert.com/latest-notifications/",
+  "extraction_spec": "Extract all government job notifications from the main table on this page. For each row extract: post_date (the date the notification was posted), recruitment_board (the organization name like UPSC, SSC, etc.), post_name (the job title/position name), qualification (required educational qualification), advt_no (advertisement number if available), last_date (the deadline to apply), and detail_url (the href link to the full notification page). Return as a JSON array of objects."
+}
