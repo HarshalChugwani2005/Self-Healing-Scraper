@@ -1,0 +1,33 @@
+{
+  "name": "self-healing-scraper",
+  "version": "1.0.0",
+  "description": "Self-healing web scraper for FreeJobAlert.com using Bright Data CLI — Scrape-Verse Hackathon",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "scrape": "node src/index.js --once",
+    "dashboard": "node src/dashboard/server.js",
+    "setup": "bash setup.sh",
+    "create-scraper": "node src/create-scraper.js",
+    "simulate-break": "node src/simulate-break.js",
+    "dev": "concurrently \"node src/index.js\" \"node src/dashboard/server.js\""
+  },
+  "keywords": [
+    "bright-data",
+    "self-healing",
+    "web-scraper",
+    "scrape-verse",
+    "hackathon"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "better-sqlite3": "^11.7.0",
+    "express": "^4.21.0",
+    "node-cron": "^4.6.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}
