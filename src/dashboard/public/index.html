@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Self-Healing Scraper — Dashboard</title>
+    <meta name="description" content="Real-time monitoring dashboard for the self-healing web scraper targeting FreeJobAlert.com. Tracks scrape runs, validation failures, and AI-powered heal cycles.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- ═══ Header ═══ -->
+    <header class="header" id="main-header">
+        <div class="header-inner">
+            <div class="logo">
+                <span class="logo-icon">🔄</span>
+                <div>
+                    <h1>Self-Healing Scraper</h1>
+                    <p class="logo-sub">FreeJobAlert.com — Live Monitor</p>
+                </div>
+            </div>
+            <div class="header-actions">
+                <button class="btn btn-primary" id="btn-trigger-run" onclick="triggerRun()">
+                    <span class="btn-icon">▶</span> Run Scrape
+                </button>
+                <button class="btn btn-danger" id="btn-simulate-break" onclick="simulateBreak()">
+                    <span class="btn-icon">💥</span> Simulate Break
+                </button>
+                <span class="status-dot" id="status-dot"></span>
+            </div>
+        </div>
+    </header>
+
+    <!-- ═══ Stats Bar ═══ -->
+    <section class="stats-bar" id="stats-bar">
+        <div class="stat-card" id="stat-total-runs">
+            <div class="stat-value" id="stat-total-val">—</div>
+            <div class="stat-label">Total Runs</div>
+        </div>
+        <div class="stat-card" id="stat-success-rate">
+            <div class="stat-value stat-success" id="stat-success-val">—</div>
+            <div class="stat-label">Success Rate</div>
+        </div>
+        <div class="stat-card" id="stat-heals">
+            <div class="stat-value stat-heal" id="stat-heals-val">—</div>
+            <div class="stat-label">Heals Triggered</div>
+        </div>
+        <div class="stat-card" id="stat-verified">
+            <div class="stat-value stat-verified" id="stat-verified-val">—</div>
+            <div class="stat-label">Verified Fixes</div>
+        </div>
+        <div class="stat-card" id="stat-last-run">
+            <div class="stat-value stat-time" id="stat-lastrun-val">—</div>
+            <div class="stat-label">Last Run</div>
+        </div>
+    </section>
+
+    <!-- ═══ Main Grid ═══ -->
+    <main class="main-grid">
+        <!-- Left Column: Latest Data + Run History -->
+        <div class="column column-left">
+
+            <!-- Panel: Latest Scraped Data -->
+            <section class="panel" id="panel-latest-data">
+                <div class="panel-header">
+                    <h2>📋 Latest Scraped Data</h2>
+                    <span class="badge badge-count" id="latest-count">0 rows</span>
+                </div>
+                <div class="panel-body" id="latest-data-body">
+                    <div class="empty-state">No data yet — run a scrape to begin.</div>
+                </div>
+            </section>
+
+            <!-- Panel: Run History Timeline -->
+            <section class="panel" id="panel-run-history">
+                <div class="panel-header">
+                    <h2>📅 Run History</h2>
+                </div>
+                <div class="panel-body timeline" id="run-history-body">
+                    <div class="empty-state">No runs yet.</div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Right Column: Self-Healing Events (the money panel) -->
+        <div class="column column-right">
+            <section class="panel panel-heal" id="panel-heal-events">
+                <div class="panel-header">
+                    <h2>🔧 Self-Healing Events</h2>
+                    <span class="badge badge-heal" id="heal-count">0 events</span>
+                </div>
+                <div class="panel-body" id="heal-events-body">
+                    <div class="empty-state">
+                        No heal events yet.<br>
+                        Click <strong>"Simulate Break"</strong> to trigger a demo heal cycle.
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- ═══ Toast container ═══ -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>
