@@ -1,0 +1,52 @@
+{
+    "note": "This is an example heal event log from a simulated break.",
+    "heal_event": {
+        "id": 1,
+        "run_id": 3,
+        "timestamp": "2026-08-18T14:30:00Z",
+        "failure_description": "The scraper for FreeJobAlert.com latest notifications is returning broken data. Only 3 rows were extracted but the page should have at least 5 job notification rows. The \"post_name\" field is missing or empty in 100% of rows (sample bad values: null, null, null). The \"recruitment_board\" field is missing or empty in 100% of rows (sample bad values: 18/08/2026, 17/08/2026, 16/08/2026). The \"last_date\" field is missing or empty in 100% of rows (sample bad values: <span class=\"dt\">31/08/2026</span>). The \"detail_url\" field is missing or empty in 100% of rows (sample bad values: (empty string)). Please fix the extraction selectors to correctly capture: post_date, recruitment_board, post_name, qualification, advt_no, last_date, and detail_url from the job notification table rows.",
+        "heal_prompt": "Same as failure_description above — this is the exact text sent to bdata scraper heal",
+        "before_snapshot": [
+            {
+                "post_date": "18/08/2026",
+                "recruitment_board": "18/08/2026",
+                "post_name": null,
+                "qualification": "Any Graduate",
+                "advt_no": "Advt. No. 01/2026",
+                "last_date": "<span class=\"dt\">31/08/2026</span>",
+                "detail_url": ""
+            },
+            {
+                "post_date": "17/08/2026",
+                "recruitment_board": "17/08/2026",
+                "post_name": null,
+                "qualification": "B.E/B.Tech",
+                "advt_no": "",
+                "last_date": "<span class=\"dt\">30/08/2026</span>",
+                "detail_url": ""
+            }
+        ],
+        "after_snapshot": [
+            {
+                "post_date": "18/08/2026",
+                "recruitment_board": "Bank of Baroda",
+                "post_name": "2482 Local Bank Officer (LBO)",
+                "qualification": "Any Graduate",
+                "advt_no": "Advt. No. 01/2026",
+                "last_date": "31/08/2026",
+                "detail_url": "https://www.freejobalert.com/articles/bank-of-baroda-lbo-recruitment-2026"
+            },
+            {
+                "post_date": "17/08/2026",
+                "recruitment_board": "SBI",
+                "post_name": "9124 Clerk (Junior Associate)",
+                "qualification": "Any Graduate",
+                "advt_no": "CRP-XVI",
+                "last_date": "30/08/2026",
+                "detail_url": "https://www.freejobalert.com/articles/sbi-clerk-recruitment-2026"
+            }
+        ],
+        "approved": true,
+        "verified": true
+    }
+}
