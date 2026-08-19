@@ -9,14 +9,38 @@
 
 const API_BASE = '';
 let refreshInterval = null;
+let countdownSeconds = 15;
+let countdownTimer = null;
+let cachedData = [];
 
 // ---------- Initialization ----------
 
 document.addEventListener('DOMContentLoaded', () => {
     fetchAll();
-    // Auto-refresh every 15 seconds
-    refreshInterval = setInterval(fetchAll, 15000);
+    startCountdown();
 });
+
+function startCountdown() {
+    countdownSeconds = 15;
+    updateCountdownUI();
+
+    if (countdownTimer) clearInterval(countdownTimer);
+    countdownTimer = setInterval(() => {
+        countdownSeconds--;
+        if (countdownSeconds <= 0) {
+            countdownSeconds = 15;
+            fetchAll();
+        }
+        updateCountdownUI();
+    }, 1000);
+}
+
+function updateCountdownUI() {
+    const el = document.getElementById('countdown-timer');
+    if (el) {
+        el.textContent = `Live • ${countdownSeconds}s`;
+    }
+}
 
 async function fetchAll() {
     try {
@@ -79,6 +103,7 @@ async function fetchLatestData() {
             ? successRun.raw_json
             : (successRun.raw_json.results || successRun.raw_json.data || []);
 
+        cachedData = data;
         countBadge.textContent = `${data.length} rows`;
 
         if (data.length === 0) {
@@ -433,4 +458,49 @@ function showToast(message, type = 'info') {
         toast.style.animation = 'toast-out 0.3s ease forwards';
         setTimeout(() => toast.remove(), 300);
     }, 5000);
+}
+
+// ---------- Data Export (CSV & JSON) ----------
+
+function exportData(format) {
+    if (!cachedData || cachedData.length === 0) {
+        showToast('No scraped data available to export yet', 'error');
+        return;
+    }
+
+    const dateStr = new Date().toISOString().split('T')[0];
+    const filename = `freejobalert-notifications-${dateStr}.${format}`;
+
+    if (format === 'json') {
+        const jsonStr = JSON.stringify(cachedData, null, 2);
+        downloadFile(jsonStr, filename, 'application/json');
+        showToast(`📥 Exported ${cachedData.length} records to JSON`, 'success');
+    } else if (format === 'csv') {
+        const fields = ['post_date', 'recruitment_board', 'post_name', 'qualification', 'advt_no', 'last_date', 'detail_url'];
+        const headers = ['Post Date', 'Recruitment Board', 'Post Name', 'Qualification', 'Advt No', 'Last Date', 'Detail URL'];
+
+        let csvContent = headers.join(',') + '\n';
+        cachedData.forEach(row => {
+            const values = fields.map(field => {
+                let val = (row[field] || '').toString().replace(/"/g, '""');
+                return `"${val}"`;
+            });
+            csvContent += values.join(',') + '\n';
+        });
+
+        downloadFile(csvContent, filename, 'text/csv;charset=utf-8;');
+        showToast(`📥 Exported ${cachedData.length} records to CSV`, 'success');
+    }
+}
+
+function downloadFile(content, filename, type) {
+    const blob = new Blob([content], { type });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
 }

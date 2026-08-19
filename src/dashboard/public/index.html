@@ -28,7 +28,10 @@
                 <button class="btn btn-danger" id="btn-simulate-break" onclick="simulateBreak()">
                     <span class="btn-icon">💥</span> Simulate Break
                 </button>
-                <span class="status-dot" id="status-dot"></span>
+                <div class="live-badge" id="live-indicator">
+                    <span class="status-dot"></span>
+                    <span id="countdown-timer">Live • 15s</span>
+                </div>
             </div>
         </div>
     </header>
@@ -66,7 +69,15 @@
             <section class="panel" id="panel-latest-data">
                 <div class="panel-header">
                     <h2>📋 Latest Scraped Data</h2>
-                    <span class="badge badge-count" id="latest-count">0 rows</span>
+                    <div class="panel-header-actions">
+                        <span class="badge badge-count" id="latest-count">0 rows</span>
+                        <button class="btn btn-sm btn-outline" id="btn-export-csv" onclick="exportData('csv')" title="Download as CSV">
+                            📥 CSV
+                        </button>
+                        <button class="btn btn-sm btn-outline" id="btn-export-json" onclick="exportData('json')" title="Download as JSON">
+                            📥 JSON
+                        </button>
+                    </div>
                 </div>
                 <div class="panel-body" id="latest-data-body">
                     <div class="empty-state">No data yet — run a scrape to begin.</div>
