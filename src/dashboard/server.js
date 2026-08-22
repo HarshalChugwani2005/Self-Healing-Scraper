@@ -49,7 +49,14 @@ app.get('/favicon.ico', (req, res) => res.status(204).end());
  */
 app.get('/api/runs', (req, res) => {
     const limit = parseInt(req.query.limit) || 50;
-    const runs = db.getRecentRuns(limit);
+    const offset = parseInt(req.query.offset) || 0;
+
+    let runs;
+    if (offset > 0 && db.db) {
+        runs = db.db.prepare('SELECT * FROM scrape_runs ORDER BY id DESC LIMIT ? OFFSET ?').all(limit, offset);
+    } else {
+        runs = db.getRecentRuns(limit);
+    }
 
     // Parse raw_json for the response (don't send raw strings)
     const parsedRuns = runs.map(run => ({

@@ -15,7 +15,7 @@
     <header class="header" id="main-header">
         <div class="header-inner">
             <div class="logo">
-                <span class="logo-icon">🔄</span>
+                <span class="logo-icon" aria-hidden="true">🔄</span>
                 <div>
                     <h1>Self-Healing Scraper</h1>
                     <p class="logo-sub">FreeJobAlert.com — Live Monitor</p>
@@ -23,10 +23,10 @@
             </div>
             <div class="header-actions">
                 <button class="btn btn-primary" id="btn-trigger-run" onclick="triggerRun()">
-                    <span class="btn-icon">▶</span> Run Scrape
+                    <span class="btn-icon" aria-hidden="true">▶</span> Run Scrape
                 </button>
                 <button class="btn btn-danger" id="btn-simulate-break" onclick="simulateBreak()">
-                    <span class="btn-icon">💥</span> Simulate Break
+                    <span class="btn-icon" aria-hidden="true">💥</span> Simulate Break
                 </button>
                 <div class="live-badge" id="live-indicator">
                     <span class="status-dot"></span>
@@ -68,14 +68,14 @@
             <!-- Panel: Latest Scraped Data -->
             <section class="panel" id="panel-latest-data">
                 <div class="panel-header">
-                    <h2>📋 Latest Scraped Data</h2>
+                    <h2><span aria-hidden="true">📋</span> Latest Scraped Data</h2>
                     <div class="panel-header-actions">
                         <span class="badge badge-count" id="latest-count">0 rows</span>
-                        <button class="btn btn-sm btn-outline" id="btn-export-csv" onclick="exportData('csv')" title="Download as CSV">
-                            📥 CSV
+                        <button class="btn btn-sm btn-outline" id="btn-export-csv" onclick="exportData('csv')" title="Download as CSV" aria-label="Download data as CSV">
+                            <span aria-hidden="true">📥</span> CSV
                         </button>
-                        <button class="btn btn-sm btn-outline" id="btn-export-json" onclick="exportData('json')" title="Download as JSON">
-                            📥 JSON
+                        <button class="btn btn-sm btn-outline" id="btn-export-json" onclick="exportData('json')" title="Download as JSON" aria-label="Download data as JSON">
+                            <span aria-hidden="true">📥</span> JSON
                         </button>
                     </div>
                 </div>
@@ -87,7 +87,7 @@
             <!-- Panel: Run History Timeline -->
             <section class="panel" id="panel-run-history">
                 <div class="panel-header">
-                    <h2>📅 Run History</h2>
+                    <h2><span aria-hidden="true">📅</span> Run History</h2>
                 </div>
                 <div class="panel-body timeline" id="run-history-body">
                     <div class="empty-state">No runs yet.</div>
@@ -99,7 +99,7 @@
         <div class="column column-right">
             <section class="panel panel-heal" id="panel-heal-events">
                 <div class="panel-header">
-                    <h2>🔧 Self-Healing Events</h2>
+                    <h2><span aria-hidden="true">🔧</span> Self-Healing Events</h2>
                     <span class="badge badge-heal" id="heal-count">0 events</span>
                 </div>
                 <div class="panel-body" id="heal-events-body">
@@ -112,8 +112,24 @@
         </div>
     </main>
 
+    <!-- ═══ Row Detail Modal ═══ -->
+    <div class="modal-backdrop" id="row-detail-modal" role="dialog" aria-modal="true" aria-labelledby="modal-row-title" style="display: none;" onclick="handleModalBackdropClick(event)">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h3 id="modal-row-title"><span aria-hidden="true">📋</span> Job Notification Details</h3>
+                <button class="btn-close-modal" onclick="closeRowModal()" aria-label="Close details modal">&times;</button>
+            </div>
+            <div class="modal-body" id="modal-row-body">
+                <!-- Dynamically populated -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline btn-sm" onclick="closeRowModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
     <!-- ═══ Toast container ═══ -->
-    <div class="toast-container" id="toast-container"></div>
+    <div class="toast-container" id="toast-container" aria-live="polite" aria-atomic="true"></div>
 
     <script src="app.js"></script>
 </body>
