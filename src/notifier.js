@@ -1,5 +1,5 @@
 // ============================================================================
-// notifier.js — Downstream alert dispatcher (Discord / Slack / Generic Webhook)
+// notifier.js — Downstream alert dispatcher (Discord & Slack Webhooks)
 // ============================================================================
 // Sends automated downstream notifications when:
 //   1. Clean scrape completes with new job notifications
@@ -10,7 +10,7 @@
  * Send a webhook payload to the configured WEBHOOK_URL.
  * Supports Discord, Slack, and generic JSON webhook receivers.
  *
- * @param {Object} payload - { title, description, color, fields, url }
+ * @param {Object} payload - { title, description, color, fields }
  */
 async function sendWebhookAlert({ title, description, color = 0x3dd68c, fields = [] }) {
     const webhookUrl = process.env.WEBHOOK_URL;
@@ -19,22 +19,51 @@ async function sendWebhookAlert({ title, description, color = 0x3dd68c, fields =
         return;
     }
 
+    const platform = (process.env.WEBHOOK_PLATFORM || (webhookUrl.includes('slack.com') ? 'slack' : 'discord')).toLowerCase();
+
     try {
-        // Build universal payload compatible with Discord and Slack webhooks
-        const body = {
-            username: 'Self-Healing Scraper Bot',
-            content: `📢 **${title}**\n${description}`,
-            embeds: [
-                {
-                    title,
-                    description,
-                    color,
-                    fields: fields.map(f => ({ name: f.name, value: f.value, inline: !!f.inline })),
-                    timestamp: new Date().toISOString(),
-                    footer: { text: 'FreeJobAlert Self-Healing Pipeline' }
-                }
-            ]
-        };
+        let body;
+
+        if (platform === 'slack') {
+            // Slack Incoming Webhook Format
+            const hexColor = '#' + color.toString(16).padStart(6, '0');
+            const slackFields = fields.map(f => `*${f.name}*\n${f.value}`).join('\n\n');
+            const formattedText = `*${title}*\n${description}${slackFields ? '\n\n' + slackFields : ''}`;
+
+            body = {
+                text: formattedText,
+                attachments: [
+                    {
+                        color: hexColor,
+                        title,
+                        text: description,
+                        fields: fields.map(f => ({
+                            title: f.name,
+                            value: f.value,
+                            short: !!f.inline
+                        })),
+                        footer: 'FreeJobAlert Self-Healing Pipeline',
+                        ts: Math.floor(Date.now() / 1000)
+                    }
+                ]
+            };
+        } else {
+            // Discord Webhook Format
+            body = {
+                username: 'Self-Healing Scraper Bot',
+                content: `📢 **${title}**\n${description}`,
+                embeds: [
+                    {
+                        title,
+                        description,
+                        color,
+                        fields: fields.map(f => ({ name: f.name, value: f.value, inline: !!f.inline })),
+                        timestamp: new Date().toISOString(),
+                        footer: { text: 'FreeJobAlert Self-Healing Pipeline' }
+                    }
+                ]
+            };
+        }
 
         const res = await fetch(webhookUrl, {
             method: 'POST',
@@ -43,7 +72,7 @@ async function sendWebhookAlert({ title, description, color = 0x3dd68c, fields =
         });
 
         if (res.ok) {
-            console.log('  🔔 Downstream webhook alert sent successfully');
+            console.log(`  🔔 Downstream ${platform} alert sent successfully`);
         } else {
             console.log(`  ⚠️ Webhook alert failed with status ${res.status}`);
         }

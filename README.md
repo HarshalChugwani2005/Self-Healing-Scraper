@@ -196,7 +196,7 @@ Self-Healing-Scraper/
 4. **Failure descriptions as heal prompts** — The validator doesn't just say "failed" — it describes *which fields, what percentage, and what the bad values looked like*. This precision enables Bright Data's AI to pinpoint exact DOM changes.
 5. **Bounded 2-Attempt Retry** — If verification fails after an initial heal attempt, the engine automatically refines the prompt with residual validation errors and performs a second attempt.
 6. **Human-in-the-Loop or Unattended** — Supports both `AUTO_APPROVE=true` (for unattended cron runs) and `AUTO_APPROVE=false` (for manual preview review before committing fixes).
-7. **Downstream Alert Dispatcher** — Automatically broadcasts new job notices or self-healing fix reports to Discord, Slack, or Telegram via configurable `WEBHOOK_URL`.
+7. **Downstream Alert Dispatcher** — Automatically broadcasts new job notices or self-healing fix reports to Discord and Slack via configurable `WEBHOOK_URL`.
 
 ## 📊 Dashboard Panels
 
