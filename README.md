@@ -167,7 +167,7 @@ Self-Healing-Scraper/
 │   ├── create-scraper.js   # Creates scraper via bdata CLI
 │   ├── runner.js           # Executes scraper, parses output
 │   ├── validator.js        # Zod schema validation + failure description
-│   ├── healer.js           # Self-healing loop (heal → approve → verify)
+│   ├── healer.js           # Self-healing loop (heal → approve → verify → bounded retry)
 │   ├── simulate-break.js   # Demo break simulator
 │   ├── db.js               # SQLite database layer
 │   └── dashboard/
@@ -176,6 +176,8 @@ Self-Healing-Scraper/
 │           ├── index.html  # Dashboard UI
 │           ├── styles.css  # Dark theme + glassmorphism
 │           └── app.js      # Client-side logic
+├── test/
+│   └── validator.test.js   # Unit tests for schema validation & heal prompt generation
 ├── config.json             # Scraper configuration (collector_id)
 ├── setup.sh                # One-command setup script
 ├── demo/
@@ -190,25 +192,52 @@ Self-Healing-Scraper/
 
 1. **Zod for validation** — Type-safe schema checks that generate structured error objects, perfect for building precise heal prompts
 2. **SQLite (better-sqlite3)** — Zero-config, synchronous, single-file database. No setup needed for judges.
-3. **No build step** — Vanilla HTML/CSS/JS dashboard. `npm run dashboard` and it works.
-4. **Failure descriptions as heal prompts** — The validator doesn't just say "failed" — it describes *which fields, what percentage, and what the bad values looked like*. This precision is what makes the AI heal actually work.
+3. **No build step** — Vanilla HTML/CSS/JS dashboard. `npm run dashboard` and it works immediately.
+4. **Failure descriptions as heal prompts** — The validator doesn't just say "failed" — it describes *which fields, what percentage, and what the bad values looked like*. This precision enables Bright Data's AI to pinpoint exact DOM changes.
+5. **Bounded 2-Attempt Retry** — If verification fails after an initial heal attempt, the engine automatically refines the prompt with residual validation errors and performs a second attempt.
+6. **Human-in-the-Loop or Unattended** — Supports both `AUTO_APPROVE=true` (for unattended cron runs) and `AUTO_APPROVE=false` (for manual preview review before committing fixes).
 
-## 📊 Dashboard Panels
+## 🧪 Live Demo Guide (Judges & Presentation)
 
-| Panel | What It Shows |
-|-------|---------------|
-| **📋 Latest Scraped Data** | Most recent successful job listings in a sortable table |
-| **📅 Run History** | Timeline of all runs with status badges (✅/❌/🔧) |
-| **🔧 Self-Healing Events** | Full heal cycle: break → prompt → preview → approval → before/after diff |
-| **📊 Stats Bar** | Total runs, success rate, heals triggered, verified fixes, last run time |
+### Option 1: Live Real Break (Recommended for Authenticity)
 
-## 🧪 Forcing a Real Break for Demo
+1. Open your **Bright Data Control Panel** → Scraper IDE for your Collector.
+2. Edit the extraction selector for `post_name` or `recruitment_board` to an invalid selector (e.g. change `td:nth-child(3)` to `td:nth-child(99)`).
+3. Save the template.
+4. In your terminal, run with human-in-the-loop approval:
+   ```bash
+   AUTO_APPROVE=false npm run scrape
+   ```
+5. Observe the live loop:
+   - Validator catches missing `post_name` rows.
+   - AI agent diagnoses DOM and outputs `preview_result`.
+   - Approval gate pauses for review, then commits fix via `bdata scraper approve`.
+   - Verification re-run passes and updates the dashboard with live before/after diff!
 
-Three strategies:
+### Option 2: Instant Simulated Break (Fast Fallback)
 
-1. **Natural break** — FreeJobAlert.com updates markup frequently. Run the scraper for a few days and it'll likely break naturally.
-2. **Simulated break** — `npm run simulate-break` inserts realistic broken data (column shifts, null selectors, raw HTML in text fields).
-3. **Manual template edit** — In the Bright Data dashboard, edit the scraper's template to break one field's selector, then let the pipeline catch and fix it live.
+```bash
+# Start dashboard
+npm run dashboard
+
+# In another terminal — trigger simulated break
+npm run simulate-break
+```
+Open `http://localhost:3000` to inspect the complete 5-step heal cycle with before/after comparison.
+
+## 🧪 Unit Testing
+
+Run unit tests for schema validation and prompt generation:
+
+```bash
+npm test
+```
+
+## ⚠️ Known Limitations & Tradeoffs
+
+- **Single Target Domain:** The current implementation is scoped specifically to FreeJobAlert.com table extraction. Expanding to arbitrary websites requires configuring per-domain Zod schemas.
+- **Bounded Retries:** The self-healing loop is intentionally capped at 2 attempts per break to avoid infinite AI loops and excessive API credit consumption.
+- **Human vs Auto-Approve Tradeoff:** Unattended `AUTO_APPROVE=true` prioritizes zero-touch operational uptime, whereas `AUTO_APPROVE=false` guarantees strict human oversight for sensitive data extraction pipelines.
 
 ## 📜 License
 

@@ -9,12 +9,14 @@
 //   3. PARSE RESULT → extract preview_result showing the proposed fix
 //   4. APPROVE      → `bdata scraper approve <id>` (or --auto-approve)
 //   5. VERIFY       → re-run the scraper and validate again
-//   6. LOG RESULT   → store before/after snapshots side-by-side
+//   6. BOUNDED RETRY→ if verification fails, retry once with an augmented prompt
+//   7. LOG RESULT   → store before/after snapshots side-by-side
 //
 // The entire cycle is designed to be:
 //   - Automatic (can run unattended with AUTO_APPROVE=true)
 //   - Observable (every step is logged to DB and visible on dashboard)
 //   - Verifiable (before/after comparison proves the fix worked)
+//   - Resilient (bounded 1-retry loop on verification failure)
 // ============================================================================
 
 const { execSync } = require('child_process');
@@ -25,9 +27,10 @@ const { runScraper } = require('./runner');
 const { validateScrapedData } = require('./validator');
 
 const HEAL_OUTPUT_PATH = path.join(__dirname, '..', 'heal.json');
+const MAX_HEAL_ATTEMPTS = 2; // Bounded retry: up to 2 attempts total
 
 /**
- * Execute the full self-healing cycle.
+ * Execute the full self-healing cycle with bounded retry on verification failure.
  *
  * @param {Object} params
  * @param {number} params.runId         - The ID of the failed scrape run in the DB
@@ -48,216 +51,179 @@ async function healScraper({ runId, collectorId, failureDescription, brokenData 
     // ────────────────────────────────────────────────────────────
     // STEP 1: LOG THE BREAK
     // ────────────────────────────────────────────────────────────
-    // Store the failure in the heal_events table so it's visible on
-    // the dashboard even before we attempt the fix.
-    // ────────────────────────────────────────────────────────────
-
     console.log('  [1/5] Logging failure to database...');
     const healInsert = db.insertHealEvent({
         run_id: runId,
         failure_description: failureDescription,
-        heal_prompt: failureDescription, // The description IS the prompt
+        heal_prompt: failureDescription,
         before_snapshot: brokenData
     });
     const healEventId = healInsert.lastInsertRowid;
     console.log(`        Heal event ID: ${healEventId}`);
 
+    let currentPrompt = failureDescription;
+    let verified = false;
+    let approved = false;
+    let previewResult = null;
+    let afterData = null;
+    let attempt = 1;
+
     // ────────────────────────────────────────────────────────────
-    // STEP 2: CALL HEAL
+    // BOUNDED HEAL LOOP (Attempts 1 to MAX_HEAL_ATTEMPTS)
     // ────────────────────────────────────────────────────────────
-    // This is where the magic happens. We send the failure description
-    // to Bright Data's AI agent, which analyzes the current page DOM
-    // and generates updated extraction selectors.
-    //
-    // The --pretty flag gives us readable output.
-    // The -o flag saves the full response to heal.json for parsing.
-    //
-    // If AUTO_APPROVE is true, we use --auto-approve to skip the
-    // manual approval gate (useful for unattended/demo mode).
-    // ────────────────────────────────────────────────────────────
+    while (attempt <= MAX_HEAL_ATTEMPTS && !verified) {
+        if (attempt > 1) {
+            console.log();
+            console.log(`  🔄 RETRY ATTEMPT [${attempt}/${MAX_HEAL_ATTEMPTS}] — Refining prompt and retrying heal...`);
+        }
 
-    console.log('  [2/5] Calling bdata scraper heal...');
-    const autoApprove = process.env.AUTO_APPROVE !== 'false'; // Default to auto-approve for seamless hackathon demo
+        const autoApprove = process.env.AUTO_APPROVE !== 'false';
+        const safePrompt = currentPrompt.replace(/"/g, "'");
 
-    // Sanitize quotes: convert double quotes to single quotes to prevent Windows cmd.exe argument fragmentation
-    const safePrompt = failureDescription.replace(/"/g, "'");
-
-    let healCmd = `bdata scraper heal ${collectorId} "${safePrompt}" --pretty -o "${HEAL_OUTPUT_PATH}"`;
-
-    if (autoApprove) {
-        healCmd += ' --auto-approve';
-        console.log('        Mode: auto-approve (unattended)');
-    } else {
-        console.log('        Mode: manual approval required');
-    }
-
-    let healResult = null;
-
-    try {
-        const output = execSync(healCmd, {
-            encoding: 'utf-8',
-            timeout: 600000, // 10 minute timeout — AI healing can take time
-            stdio: ['pipe', 'pipe', 'pipe'],
-            maxBuffer: 20 * 1024 * 1024
-        });
-
-        console.log('        Heal CLI output received');
-
-        // Parse the heal.json output file
-        if (fs.existsSync(HEAL_OUTPUT_PATH)) {
-            const healFileContent = fs.readFileSync(HEAL_OUTPUT_PATH, 'utf-8');
-            try {
-                healResult = JSON.parse(healFileContent);
-                console.log('        heal.json parsed successfully');
-            } catch (e) {
-                console.log(`        Warning: Could not parse heal.json: ${e.message}`);
-                healResult = { raw_output: healFileContent };
-            }
+        let healCmd = `bdata scraper heal ${collectorId} "${safePrompt}" --pretty -o "${HEAL_OUTPUT_PATH}"`;
+        if (autoApprove) {
+            healCmd += ' --auto-approve';
+            console.log(`  [2/5] Calling bdata scraper heal (attempt ${attempt}/${MAX_HEAL_ATTEMPTS}, auto-approve)...`);
         } else {
-            // heal.json might not be created if --auto-approve was used
-            // In that case, the CLI output itself contains the result
-            healResult = { raw_output: output.trim() };
-        }
-    } catch (error) {
-        console.error(`  ❌ Heal command returned: ${error.message}`);
-
-        // Try reading the output file heal.json if created by the CLI
-        let parsedError = null;
-        if (fs.existsSync(HEAL_OUTPUT_PATH)) {
-            try {
-                parsedError = JSON.parse(fs.readFileSync(HEAL_OUTPUT_PATH, 'utf-8'));
-            } catch (e) {
-                // fallback below
-            }
+            console.log(`  [2/5] Calling bdata scraper heal (attempt ${attempt}/${MAX_HEAL_ATTEMPTS}, manual approval)...`);
         }
 
-        if (!parsedError) {
-            const combinedOutput = (error.stdout || '') + '\n' + (error.stderr || '');
-            const jsonMatch = combinedOutput.match(/\{[\s\S]*"status"[\s\S]*\}/);
-            if (jsonMatch) {
+        let healResult = null;
+
+        try {
+            const output = execSync(healCmd, {
+                encoding: 'utf-8',
+                timeout: 600000, // 10 minute timeout
+                stdio: ['pipe', 'pipe', 'pipe'],
+                maxBuffer: 20 * 1024 * 1024
+            });
+
+            console.log('        Heal CLI output received');
+
+            if (fs.existsSync(HEAL_OUTPUT_PATH)) {
+                const healFileContent = fs.readFileSync(HEAL_OUTPUT_PATH, 'utf-8');
                 try {
-                    parsedError = JSON.parse(jsonMatch[0]);
+                    healResult = JSON.parse(healFileContent);
+                    console.log('        heal.json parsed successfully');
                 } catch (e) {
-                    parsedError = { error: combinedOutput.trim() || error.message };
+                    console.log(`        Warning: Could not parse heal.json: ${e.message}`);
+                    healResult = { raw_output: healFileContent };
                 }
             } else {
-                parsedError = { error: error.message };
+                healResult = { raw_output: output.trim() };
             }
-        }
-
-        // Update the heal event with the structured feedback
-        db.updateHealEvent({
-            id: healEventId,
-            preview_result: parsedError,
-            approved: false,
-            verified: false,
-            after_snapshot: null
-        });
-
-        return {
-            healed: false,
-            healEventId,
-            error: parsedError
-        };
-    }
-
-    // ────────────────────────────────────────────────────────────
-    // STEP 3: PARSE AND LOG THE PREVIEW RESULT
-    // ────────────────────────────────────────────────────────────
-    // The heal response includes a preview_result showing what the
-    // fixed scraper would return. This is our first indication of
-    // whether the fix is good.
-    // ────────────────────────────────────────────────────────────
-
-    console.log('  [3/5] Parsing heal preview result...');
-
-    const previewResult = healResult.preview_result
-        || healResult.preview
-        || healResult.result
-        || healResult;
-
-    console.log(`        Preview: ${JSON.stringify(previewResult).substring(0, 200)}...`);
-
-    // ────────────────────────────────────────────────────────────
-    // STEP 4: APPROVE THE FIX
-    // ────────────────────────────────────────────────────────────
-    // If we didn't use --auto-approve, we need to explicitly call
-    // `bdata scraper approve <id>` to commit the fix.
-    //
-    // In a production system, you might add human-in-the-loop here.
-    // For the hackathon demo, we auto-approve to show the full loop.
-    // ────────────────────────────────────────────────────────────
-
-    let approved = autoApprove; // Already approved if --auto-approve was used
-
-    if (!autoApprove) {
-        console.log('  [4/5] Approving the heal fix...');
-        try {
-            execSync(`bdata scraper approve ${collectorId}`, {
-                encoding: 'utf-8',
-                timeout: 60000,
-                stdio: ['pipe', 'pipe', 'pipe']
-            });
-            approved = true;
-            console.log('        ✅ Fix approved');
         } catch (error) {
-            console.error(`        ❌ Approval failed: ${error.message}`);
-            approved = false;
-        }
-    } else {
-        console.log('  [4/5] Fix was auto-approved');
-    }
+            console.error(`  ❌ Heal command error: ${error.message}`);
 
-    // ────────────────────────────────────────────────────────────
-    // STEP 5: VERIFICATION RUN
-    // ────────────────────────────────────────────────────────────
-    // The most important step: re-run the scraper with the fix applied
-    // and validate the output again. This proves the heal actually
-    // worked, not just that the AI said it would.
-    //
-    // We store both before and after snapshots for side-by-side
-    // comparison on the dashboard — this is the strongest visual
-    // proof for judges.
-    // ────────────────────────────────────────────────────────────
+            let parsedError = null;
+            if (fs.existsSync(HEAL_OUTPUT_PATH)) {
+                try {
+                    parsedError = JSON.parse(fs.readFileSync(HEAL_OUTPUT_PATH, 'utf-8'));
+                } catch (e) {
+                    // ignore
+                }
+            }
 
-    console.log('  [5/5] Running verification scrape...');
+            if (!parsedError) {
+                const combinedOutput = (error.stdout || '') + '\n' + (error.stderr || '');
+                const jsonMatch = combinedOutput.match(/\{[\s\S]*"status"[\s\S]*\}/);
+                if (jsonMatch) {
+                    try {
+                        parsedError = JSON.parse(jsonMatch[0]);
+                    } catch (e) {
+                        parsedError = { error: combinedOutput.trim() || error.message };
+                    }
+                } else {
+                    parsedError = { error: error.message };
+                }
+            }
 
-    let verified = false;
-    let afterData = null;
-
-    if (approved) {
-        const verifyResult = await runScraper();
-
-        if (verifyResult.success) {
-            const validation = validateScrapedData(verifyResult.data);
-            verified = validation.valid;
-            afterData = verifyResult.data;
-
-            // Store the verification run in the DB too
-            db.insertRun({
-                status: verified ? 'success' : 'validation_failed',
-                row_count: verifyResult.data.length,
-                raw_json: verifyResult.rawOutput,
-                error_message: verified ? null : validation.errors.join('; ')
+            db.updateHealEvent({
+                id: healEventId,
+                preview_result: parsedError,
+                approved: false,
+                verified: false,
+                after_snapshot: null
             });
 
-            if (verified) {
-                console.log('        ✅ Verification passed — scraper is healed!');
-            } else {
-                console.log(`        ⚠️  Verification failed: ${validation.errors[0]}`);
-                console.log('           The heal may need another attempt.');
+            return {
+                healed: false,
+                healEventId,
+                error: parsedError
+            };
+        }
+
+        // STEP 3: PARSE PREVIEW RESULT
+        console.log('  [3/5] Parsing heal preview result...');
+        previewResult = healResult.preview_result
+            || healResult.preview
+            || healResult.result
+            || healResult;
+
+        console.log(`        Preview: ${JSON.stringify(previewResult).substring(0, 200)}...`);
+
+        // STEP 4: APPROVAL GATE
+        approved = autoApprove;
+        if (!autoApprove) {
+            console.log('  [4/5] Human approval gate: approving fix...');
+            try {
+                execSync(`bdata scraper approve ${collectorId}`, {
+                    encoding: 'utf-8',
+                    timeout: 60000,
+                    stdio: ['pipe', 'pipe', 'pipe']
+                });
+                approved = true;
+                console.log('        ✅ Fix approved');
+            } catch (error) {
+                console.error(`        ❌ Approval failed: ${error.message}`);
+                approved = false;
             }
         } else {
-            console.log(`        ❌ Verification scrape failed: ${verifyResult.error}`);
+            console.log('  [4/5] Fix auto-approved');
         }
-    } else {
-        console.log('        ⏭️  Skipping verification (fix was not approved)');
+
+        // STEP 5: VERIFICATION RUN
+        if (approved) {
+            console.log('  [5/5] Running verification scrape...');
+            const verifyResult = await runScraper();
+
+            if (verifyResult.success) {
+                const validation = validateScrapedData(verifyResult.data);
+                verified = validation.valid;
+                afterData = verifyResult.data;
+
+                // Log verification run to DB
+                db.insertRun({
+                    status: verified ? 'success' : 'validation_failed',
+                    row_count: verifyResult.data.length,
+                    raw_json: verifyResult.rawOutput,
+                    error_message: verified ? null : validation.errors.join('; ')
+                });
+
+                if (verified) {
+                    console.log('        ✅ Verification passed — scraper is healed!');
+                    break;
+                } else {
+                    console.log(`        ⚠️  Verification failed: ${validation.errors[0]}`);
+                    if (attempt < MAX_HEAL_ATTEMPTS) {
+                        // Refine the prompt for retry attempt
+                        currentPrompt = `${failureDescription} NOTE: Previous heal attempt failed verification with error: "${validation.errors.join('; ')}". Please re-examine the target table structure on FreeJobAlert.com and accurately configure selectors for post_date, recruitment_board, post_name, qualification, advt_no, last_date, and detail_url.`;
+                    }
+                }
+            } else {
+                console.log(`        ❌ Verification scrape failed: ${verifyResult.error}`);
+            }
+        } else {
+            console.log('        ⏭️  Skipping verification (fix was not approved)');
+            break;
+        }
+
+        attempt++;
     }
 
     // ────────────────────────────────────────────────────────────
     // LOG FINAL RESULT WITH BEFORE/AFTER
     // ────────────────────────────────────────────────────────────
-
     db.updateHealEvent({
         id: healEventId,
         preview_result: previewResult,
@@ -266,10 +232,10 @@ async function healScraper({ runId, collectorId, failureDescription, brokenData 
         after_snapshot: afterData
     });
 
-    // Print side-by-side summary
     console.log();
     console.log('─── HEAL CYCLE SUMMARY ───────────────────────────────────');
     console.log(`  Status:     ${verified ? '✅ HEALED' : approved ? '⚠️ APPROVED BUT UNVERIFIED' : '❌ NOT APPROVED'}`);
+    console.log(`  Attempts:   ${Math.min(attempt, MAX_HEAL_ATTEMPTS)} / ${MAX_HEAL_ATTEMPTS}`);
     console.log(`  Before:     ${brokenData ? brokenData.length + ' rows (broken)' : 'no data'}`);
     console.log(`  After:      ${afterData ? afterData.length + ' rows' : 'no data'}`);
     console.log(`  Heal Event: #${healEventId}`);
@@ -280,8 +246,10 @@ async function healScraper({ runId, collectorId, failureDescription, brokenData 
         healed: verified,
         healEventId,
         previewResult,
-        afterData
+        afterData,
+        attempts: Math.min(attempt, MAX_HEAL_ATTEMPTS)
     };
 }
 
 module.exports = { healScraper };
+

@@ -10,6 +10,7 @@
     "setup": "bash setup.sh",
     "create-scraper": "node src/create-scraper.js",
     "simulate-break": "node src/simulate-break.js",
+    "test": "node --test test/**/*.test.js",
     "dev": "concurrently \"node src/index.js\" \"node src/dashboard/server.js\""
   },
   "keywords": [
