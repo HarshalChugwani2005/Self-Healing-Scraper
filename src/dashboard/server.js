@@ -276,6 +276,9 @@ app.post('/api/simulate-break', async (req, res) => {
             after_snapshot: HEALED_AFTER_ROWS
         });
 
+        const { notifyHealSuccess } = require('../notifier');
+        await notifyHealSuccess(healEventId, validation.failureDescription, HEALED_AFTER_ROWS.length);
+
         res.json({
             ok: true,
             runId: failedRun.lastInsertRowid,

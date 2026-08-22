@@ -212,6 +212,10 @@ async function simulateBreak() {
         after_snapshot: HEALED_AFTER_ROWS
     });
 
+    // Notify downstream consumers via webhook
+    const { notifyHealSuccess } = require('./notifier');
+    await notifyHealSuccess(healEventId, validation.failureDescription, HEALED_AFTER_ROWS.length);
+
     console.log();
     console.log('═══════════════════════════════════════════════════════════');
     console.log('  ✅ SELF-HEALING RESOLVED & VERIFIED');
