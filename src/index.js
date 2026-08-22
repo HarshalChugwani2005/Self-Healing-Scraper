@@ -37,6 +37,7 @@ const db = require('./db');
 const { runScraper, getCollectorId } = require('./runner');
 const { validateScrapedData } = require('./validator');
 const { healScraper } = require('./healer');
+const { notifyScrapeSuccess, notifyHealSuccess } = require('./notifier');
 
 // ---------- Pipeline ----------
 
@@ -81,6 +82,10 @@ async function executePipeline() {
             raw_json: scrapeResult.rawOutput,
             error_message: null
         });
+
+        // Trigger downstream notification
+        await notifyScrapeSuccess(validation.stats.totalRows, scrapeResult.data);
+
         return { status: 'success', runId: run.lastInsertRowid, stats: validation.stats };
     }
 
@@ -111,6 +116,15 @@ async function executePipeline() {
         failureDescription: validation.failureDescription,
         brokenData: scrapeResult.data
     });
+
+    // Notify downstream consumers if heal succeeded
+    if (healResult.healed && healResult.afterData) {
+        await notifyHealSuccess(
+            healResult.healEventId,
+            validation.failureDescription,
+            healResult.afterData.length
+        );
+    }
 
     return {
         status: healResult.healed ? 'healed' : 'heal_attempted',
