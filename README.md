@@ -18,43 +18,7 @@
 
 ## 🏗️ Architecture
 
-```
-┌──────────────────────────────────────────────────────────┐
-│                    node-cron scheduler                   │
-│                   (every 30 min / manual)                │
-└──────────────┬───────────────────────────────────────────┘
-               │
-               ▼
-┌──────────────────────────┐
-│      runner.js           │──── bdata scraper run ────▶ Bright Data
-│  (execute scraper CLI)   │◀── JSON results ──────────    Cloud
-└──────────────┬───────────┘
-               │
-               ▼
-┌──────────────────────────┐
-│     validator.js         │
-│  (Zod schema + agg)     │
-│  ✅ pass → store in DB   │
-│  ❌ fail → generate desc │
-└──────┬───────┬───────────┘
-       │       │
-   pass│   fail│
-       │       ▼
-       │  ┌──────────────────────────┐
-       │  │     healer.js            │──── bdata scraper heal ──▶ Bright Data
-       │  │  (heal + approve + re-   │◀── heal.json ──────────     AI Agent
-       │  │   run verification)      │──── bdata scraper approve ─▶
-       │  └──────────┬───────────────┘
-       │             │
-       ▼             ▼
-┌──────────────────────────┐     ┌──────────────────────────┐
-│      SQLite DB           │◀───▶│   Express Dashboard      │
-│  scrape_runs table       │     │   /api/runs              │
-│  heal_events table       │     │   /api/heal-events       │
-└──────────────────────────┘     │   /api/stats             │
-                                 │   public/index.html      │
-                                 └──────────────────────────┘
-```
+![Architecture Diagram](docs/architecture.jpg)
 
 ## 🚀 Quick Start
 
