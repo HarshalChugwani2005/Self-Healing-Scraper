@@ -1,0 +1,56 @@
+{
+  "_meta": {
+    "source": "FreeJobAlert.com — Latest Notifications",
+    "scraper": "Self-Healing Scraper (Bright Data Collector c_msz0bfd7278l5fdm1h)",
+    "scraped_at": "2026-08-22T13:41:34.405Z",
+    "row_count": 5,
+    "schema": "JobNotificationSchema (Zod validated)"
+  },
+  "data": [
+    {
+      "post_date": "18/08/2026",
+      "recruitment_board": "Bank of Baroda",
+      "post_name": "2482 Local Bank Officer (LBO)",
+      "qualification": "Any Graduate",
+      "advt_no": "Advt. No. 01/2026",
+      "last_date": "31/08/2026",
+      "detail_url": "https://www.freejobalert.com/articles/bank-of-baroda-lbo-recruitment-2026-3063349"
+    },
+    {
+      "post_date": "17/08/2026",
+      "recruitment_board": "State Bank of India (SBI)",
+      "post_name": "9124 Junior Associate (Clerk)",
+      "qualification": "Any Graduate",
+      "advt_no": "CRP-XVI",
+      "last_date": "30/08/2026",
+      "detail_url": "https://www.freejobalert.com/articles/sbi-junior-associate-clerk-recruitment-2026-3062434"
+    },
+    {
+      "post_date": "16/08/2026",
+      "recruitment_board": "DRDO - Solid State Physics Laboratory",
+      "post_name": "Apprentice (Graduate / Diploma / ITI)",
+      "qualification": "B.E/B.Tech / Diploma / ITI",
+      "advt_no": "625/HR/Apprentice/2026",
+      "last_date": "29/08/2026",
+      "detail_url": "https://www.freejobalert.com/articles/drdo-sspl-apprentice-recruitment-2026-3060942"
+    },
+    {
+      "post_date": "16/08/2026",
+      "recruitment_board": "Madhya Pradesh High Court",
+      "post_name": "Assistant Grade-III (1174 Posts)",
+      "qualification": "Any Graduate",
+      "advt_no": "614/Exam/2026",
+      "last_date": "28/08/2026",
+      "detail_url": "https://www.freejobalert.com/articles/mp-high-court-assistant-recruitment-2026-3063205"
+    },
+    {
+      "post_date": "15/08/2026",
+      "recruitment_board": "Bharat Heavy Electricals Limited (BHEL)",
+      "post_name": "530 Trade & Graduate Apprentice Posts",
+      "qualification": "Diploma / Degree in Engg",
+      "advt_no": "BHEL-TRICHY-02/2026",
+      "last_date": "27/08/2026",
+      "detail_url": "https://www.freejobalert.com/articles/bhel-trichy-apprentice-recruitment-2026-3063173"
+    }
+  ]
+}

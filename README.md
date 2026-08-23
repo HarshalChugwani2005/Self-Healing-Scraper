@@ -2,6 +2,8 @@
 
 > **Scrape-Verse Hackathon** — A self-healing web scraper for [FreeJobAlert.com](https://www.freejobalert.com/latest-notifications/) that automatically detects, diagnoses, and repairs scraper breakage using Bright Data's AI-powered CLI.
 
+📹 **[Demo Video](demo/)** · 📄 **[Sample Output](demo/sample-output.json)** · 📋 **[Heal Log](demo/example-heal-log.json)**
+
 ---
 
 ## 🎯 Problem Statement
@@ -65,7 +67,7 @@
 
 ```bash
 # 1. Clone and install
-git clone https://github.com/YOUR_USERNAME/Self-Healing-Scraper.git
+git clone https://github.com/HarshalChugwani2005/Self-Healing-Scraper.git
 cd Self-Healing-Scraper
 npm install
 
@@ -168,6 +170,7 @@ Self-Healing-Scraper/
 │   ├── runner.js           # Executes scraper, parses output
 │   ├── validator.js        # Zod schema validation + failure description
 │   ├── healer.js           # Self-healing loop (heal → approve → verify → bounded retry)
+│   ├── notifier.js         # Downstream webhook alerts (Discord / Slack)
 │   ├── simulate-break.js   # Demo break simulator
 │   ├── db.js               # SQLite database layer
 │   └── dashboard/
@@ -181,6 +184,7 @@ Self-Healing-Scraper/
 ├── config.json             # Scraper configuration (collector_id)
 ├── setup.sh                # One-command setup script
 ├── demo/
+│   ├── sample-output.json  # Example structured scraper output (Zod-validated)
 │   └── example-heal-log.json
 ├── .env.example
 ├── .gitignore
@@ -248,6 +252,16 @@ npm test
 - **Single Target Domain:** The current implementation is scoped specifically to FreeJobAlert.com table extraction. Expanding to arbitrary websites requires configuring per-domain Zod schemas.
 - **Bounded Retries:** The self-healing loop is intentionally capped at 2 attempts per break to avoid infinite AI loops and excessive API credit consumption.
 - **Human vs Auto-Approve Tradeoff:** Unattended `AUTO_APPROVE=true` prioritizes zero-touch operational uptime, whereas `AUTO_APPROVE=false` guarantees strict human oversight for sensitive data extraction pipelines.
+
+## 🤖 AI Assistance Disclosure
+
+This project was built with assistance from AI coding tools (Claude / Gemini) for:
+- **Scaffolding** — initial project structure, Express server boilerplate, and Zod schema setup
+- **Debugging** — diagnosing CLI integration issues with `bdata scraper heal` and SQLite WAL mode
+- **Documentation** — README drafting, inline code comments, and demo guide structure
+- **Dashboard polish** — CSS glassmorphism effects, responsive layout, and accessibility attributes
+
+All code has been reviewed, tested, and is fully understood by the author. Every architectural decision (bounded retry strategy, failure-description-as-heal-prompt pattern, human-in-the-loop gating) was made deliberately and can be explained in detail.
 
 ## 📜 License
 
