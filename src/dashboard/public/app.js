@@ -28,6 +28,7 @@ let sortColumn = 'post_date';
 let sortDirection = 'desc';
 let filterQuery = '';
 let isInitialLoad = true;
+let modalTrigger = null;
 
 // Heal Cards State (preserve expansion across auto-refresh)
 let expandedHealCardIds = null;
@@ -42,10 +43,25 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function setupGlobalListeners() {
-    // ESC key closes modal
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
             closeRowModal();
+        }
+
+        const modal = document.getElementById('row-detail-modal');
+        if (e.key === 'Tab' && modal && modal.style.display !== 'none') {
+            const focusable = modal.querySelectorAll('button, a[href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+            if (focusable.length === 0) return;
+
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+            if (e.shiftKey && document.activeElement === first) {
+                e.preventDefault();
+                last.focus();
+            } else if (!e.shiftKey && document.activeElement === last) {
+                e.preventDefault();
+                first.focus();
+            }
         }
     });
 }
@@ -96,7 +112,7 @@ function startCountdown() {
 function updateCountdownUI() {
     const el = document.getElementById('countdown-timer');
     if (el) {
-        el.textContent = `Live • ${countdownSeconds}s`;
+        el.textContent = `Auto-refresh in ${countdownSeconds}s`;
     }
 }
 
@@ -112,6 +128,7 @@ async function fetchAll() {
         console.error('Fetch error:', err);
     } finally {
         isInitialLoad = false;
+        setText('last-updated', `Updated ${formatTime(new Date().toISOString())}`);
     }
 }
 
@@ -230,6 +247,8 @@ function renderTable() {
     const body = document.getElementById('latest-data-body');
     if (!body) return;
 
+    const filterHadFocus = document.activeElement?.id === 'table-filter-input';
+
     if (cachedData.length === 0) {
         body.innerHTML = '<div class="empty-state">No successful scrape data yet — run a scrape to begin.</div>';
         return;
@@ -332,16 +351,16 @@ function renderTable() {
         const url = row.detail_url || '';
 
         html += `
-            <tr role="row" onclick="openRowModal(${globalRowIndex})" title="Click to view full details">
-                <td class="cell-date col-date" title="${escapeHtml(String(row.post_date || '—'))}">${escapeHtml(postDate)}</td>
-                <td class="cell-board cell-wrap col-board" title="${escapeHtml(board)}">${escapeHtml(board)}</td>
-                <td class="cell-post cell-wrap col-post" title="${escapeHtml(postName)}">${escapeHtml(postName)}</td>
-                <td class="cell-qual cell-wrap col-qualification" title="${escapeHtml(qual)}">${escapeHtml(qual)}</td>
-                <td class="cell-date col-lastdate" title="${escapeHtml(String(row.last_date || '—'))}">${escapeHtml(lastDate)}</td>
-                <td class="url-cell col-url" onclick="event.stopPropagation()">
+            <tr role="row" tabindex="0" onclick="openRowModal(${globalRowIndex})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openRowModal(${globalRowIndex})}" title="Open row details">
+                <td data-label="Post date" class="cell-date col-date" title="${escapeHtml(String(row.post_date || '—'))}">${escapeHtml(postDate)}</td>
+                <td data-label="Board" class="cell-board cell-wrap col-board" title="${escapeHtml(board)}">${escapeHtml(board)}</td>
+                <td data-label="Post name" class="cell-post cell-wrap col-post" title="${escapeHtml(postName)}">${escapeHtml(postName)}</td>
+                <td data-label="Qualification" class="cell-qual cell-wrap col-qualification" title="${escapeHtml(qual)}">${escapeHtml(qual)}</td>
+                <td data-label="Last date" class="cell-date col-lastdate" title="${escapeHtml(String(row.last_date || '—'))}">${escapeHtml(lastDate)}</td>
+                <td data-label="Details" class="url-cell col-url" onclick="event.stopPropagation()">
                     ${url ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(url)}">${escapeHtml(truncate(url, 26))}</a>` : '—'}
                 </td>
-                <td class="col-actions" onclick="event.stopPropagation()">
+                <td data-label="Open" class="col-actions" onclick="event.stopPropagation()">
                     <button class="btn-view-row" onclick="openRowModal(${globalRowIndex})" aria-label="View details for ${escapeHtml(postName)}" title="View details">
                         👁️
                     </button>
@@ -401,6 +420,14 @@ function renderTable() {
     `;
 
     body.innerHTML = html;
+
+    if (filterHadFocus) {
+        const input = document.getElementById('table-filter-input');
+        if (input) {
+            input.focus();
+            input.setSelectionRange(input.value.length, input.value.length);
+        }
+    }
 }
 
 // Table Handlers
@@ -511,13 +538,20 @@ function openRowModal(rowIndex) {
         </div>
     `;
 
+    modalTrigger = document.activeElement;
     modal.style.display = 'flex';
+    const closeButton = modal.querySelector('.btn-close-modal');
+    if (closeButton) closeButton.focus();
 }
 
 function closeRowModal() {
     const modal = document.getElementById('row-detail-modal');
     if (modal) {
         modal.style.display = 'none';
+        if (modalTrigger && typeof modalTrigger.focus === 'function') {
+            modalTrigger.focus();
+        }
+        modalTrigger = null;
     }
 }
 
@@ -764,6 +798,10 @@ async function triggerRun() {
 }
 
 async function simulateBreak() {
+    if (!window.confirm('Simulate a scraper break and create a test heal event?')) {
+        return;
+    }
+
     const btn = document.getElementById('btn-simulate-break');
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner"></span> Simulating...';

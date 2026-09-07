@@ -25,19 +25,22 @@
                 <button class="btn btn-primary" id="btn-trigger-run" onclick="triggerRun()">
                     <span class="btn-icon" aria-hidden="true">▶</span> Run Scrape
                 </button>
-                <button class="btn btn-danger" id="btn-simulate-break" onclick="simulateBreak()">
-                    <span class="btn-icon" aria-hidden="true">💥</span> Simulate Break
+                <button class="btn btn-danger btn-demo" id="btn-simulate-break" onclick="simulateBreak()" title="Create a test validation failure and heal event">
+                    <span class="btn-icon" aria-hidden="true">⚠</span> Simulate Break
                 </button>
-                <div class="live-badge" id="live-indicator">
+                <div class="live-badge" id="live-indicator" title="The dashboard refreshes automatically">
                     <span class="status-dot"></span>
-                    <span id="countdown-timer">Live • 15s</span>
+                    <span>
+                        <span id="countdown-timer">Auto-refresh in 15s</span>
+                        <span class="last-updated" id="last-updated">Not updated yet</span>
+                    </span>
                 </div>
             </div>
         </div>
     </header>
 
     <!-- ═══ Stats Bar ═══ -->
-    <section class="stats-bar" id="stats-bar">
+    <section class="stats-bar" id="stats-bar" aria-label="Dashboard summary">
         <div class="stat-card" id="stat-total-runs">
             <div class="stat-value" id="stat-total-val">—</div>
             <div class="stat-label">Total Runs</div>

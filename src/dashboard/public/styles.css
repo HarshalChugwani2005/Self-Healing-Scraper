@@ -52,8 +52,8 @@
     /* Spacing & Radius */
     --radius-sm: 8px;
     --radius-md: 12px;
-    --radius-lg: 16px;
-    --radius-xl: 20px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
 
     /* Typography */
     --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -169,6 +169,19 @@ body::before {
     transition: all 0.2s ease;
     position: relative;
     overflow: hidden;
+    min-height: 40px;
+}
+
+.btn:focus-visible,
+.btn-view-row:focus-visible,
+.pagination-btn:focus-visible,
+.pagination-size-select:focus-visible,
+.btn-clear-filter:focus-visible,
+.btn-close-modal:focus-visible,
+.heal-card-header:focus-visible,
+.data-table tbody tr:focus-visible {
+    outline: 2px solid var(--accent-cyan);
+    outline-offset: 2px;
 }
 
 .btn::after {
@@ -228,6 +241,7 @@ body::before {
 
 .btn-sm {
     padding: 4px 10px;
+    min-height: 34px;
     font-size: 0.72rem;
     border-radius: 6px;
     font-weight: 600;
@@ -252,6 +266,16 @@ body::before {
     color: var(--accent-green);
     font-family: var(--font-mono);
     user-select: none;
+    line-height: 1.25;
+}
+
+.last-updated {
+    display: block;
+    color: var(--text-muted);
+    font-family: var(--font-sans);
+    font-size: 0.62rem;
+    font-weight: 500;
+    margin-top: 2px;
 }
 
 .status-dot {
@@ -591,6 +615,10 @@ body::before {
     cursor: pointer;
 }
 
+.data-table tbody tr:focus-visible {
+    background: rgba(78, 168, 246, 0.1);
+}
+
 .data-table tbody tr:hover {
     background: var(--bg-glass);
 }
@@ -693,6 +721,7 @@ body::before {
     font-size: 0.75rem;
     font-weight: 600;
     cursor: pointer;
+    min-height: 36px;
     transition: all 0.15s ease;
 }
 
@@ -723,6 +752,7 @@ body::before {
     font-size: 0.75rem;
     font-family: var(--font-sans);
     cursor: pointer;
+    min-height: 36px;
     outline: none;
 }
 
@@ -1230,6 +1260,11 @@ body::before {
     background: var(--bg-glass);
 }
 
+.btn-close-modal {
+    min-width: 40px;
+    min-height: 40px;
+}
+
 /* ---------- Loading Spinner ---------- */
 .spinner {
     display: inline-block;
@@ -1263,6 +1298,27 @@ body::before {
         gap: 12px;
     }
 
+    .header-actions {
+        width: 100%;
+        align-items: stretch;
+        flex-wrap: wrap;
+    }
+
+    .header-actions > .btn-primary,
+    .btn-demo,
+    .live-badge {
+        flex: 1 1 calc(50% - 6px);
+    }
+
+    .btn-demo,
+    .live-badge {
+        width: 100%;
+    }
+
+    .live-badge {
+        justify-content: center;
+    }
+
     .stats-bar {
         grid-template-columns: repeat(2, 1fr);
     }
@@ -1290,9 +1346,100 @@ body::before {
         grid-template-columns: 1fr;
     }
 
-    /* Drop qualification and advt_no from compact mobile table view */
-    .col-qualification,
-    .col-advt {
+    .table-responsive {
+        border: none;
+        overflow-x: visible;
+    }
+
+    .data-table,
+    .data-table tbody {
+        display: block;
+    }
+
+    .data-table thead {
         display: none;
     }
+
+    .data-table tbody tr {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 4px 12px;
+        padding: 12px 0;
+        border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .data-table tbody td {
+        display: grid;
+        grid-template-columns: minmax(76px, auto) minmax(0, 1fr);
+        gap: 10px;
+        align-items: start;
+        min-width: 0;
+        padding: 5px 0;
+        border: none;
+        text-align: right;
+    }
+
+    .data-table tbody td::before {
+        content: attr(data-label);
+        color: var(--text-muted);
+        font-size: 0.65rem;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-align: left;
+        text-transform: uppercase;
+    }
+
+    .data-table tbody .cell-post {
+        grid-column: 1 / -1;
+        order: -2;
+        display: block;
+        font-size: 0.9rem;
+        font-weight: 700;
+        text-align: left;
+    }
+
+    .data-table tbody .cell-post::before {
+        display: block;
+        margin-bottom: 3px;
+    }
+
+    .data-table tbody .col-actions {
+        grid-column: 2;
+        grid-row: 2 / span 4;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        padding: 0;
+    }
+
+    .data-table tbody .col-actions::before {
+        display: none;
+    }
+
+    .data-table tbody .col-url {
+        grid-column: 1 / -1;
+    }
+
+    .data-table tbody .col-qualification,
+    .data-table tbody .col-advt {
+        display: grid;
+    }
+
+    .data-table tbody .url-cell a {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    }
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        scroll-behavior: auto !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
 }
