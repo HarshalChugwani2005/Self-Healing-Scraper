@@ -3,137 +3,228 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Self-Healing Scraper — Dashboard</title>
-    <meta name="description" content="Real-time monitoring dashboard for the self-healing web scraper targeting FreeJobAlert.com. Tracks scrape runs, validation failures, and AI-powered heal cycles.">
+    <title>Pipeline Monitor & Auto-Recovery — FreeJobAlert</title>
+    <meta name="description" content="Production dashboard for monitoring FreeJobAlert web scraping pipelines, schema health, and automated selector self-healing.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css?v=3.0">
 </head>
 <body>
-    <!-- ═══ Header ═══ -->
+    <!-- ═══ Navigation Bar ═══ -->
     <header class="header" id="main-header">
         <div class="header-inner">
-            <div class="logo">
-                <span class="logo-icon" aria-hidden="true">🔄</span>
-                <div>
-                    <h1>Self-Healing Scraper</h1>
-                    <p class="logo-sub">FreeJobAlert.com — Live Monitor</p>
+            <div class="brand">
+                <div class="brand-icon-wrapper">
+                    <svg class="brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                        <path d="m9 12 2 2 4-4"/>
+                    </svg>
+                </div>
+                <div class="brand-text">
+                    <div class="brand-title-row">
+                        <h1>Scraper Console</h1>
+                        <span class="version-tag">v1.2</span>
+                    </div>
+                    <p class="brand-sub">FreeJobAlert.com Ingestion & Auto-Recovery</p>
                 </div>
             </div>
+
             <div class="header-actions">
-                <button class="btn btn-primary" id="btn-trigger-run" onclick="triggerRun()">
-                    <span class="btn-icon" aria-hidden="true">▶</span> Run Scrape
-                </button>
-                <button class="btn btn-danger btn-demo" id="btn-simulate-break" onclick="simulateBreak()" title="Create a test validation failure and heal event">
-                    <span class="btn-icon" aria-hidden="true">⚠</span> Simulate Break
-                </button>
-                <div class="live-badge" id="live-indicator" title="The dashboard refreshes automatically">
-                    <span class="status-dot"></span>
-                    <span>
-                        <span id="countdown-timer">Auto-refresh in 15s</span>
-                        <span class="last-updated" id="last-updated">Not updated yet</span>
-                    </span>
+                <div class="live-status-pill" id="live-indicator" title="Dashboard automatically checks for pipeline updates">
+                    <span class="status-pulse-dot"></span>
+                    <span class="live-status-text" id="countdown-timer">Syncing in 15s</span>
+                    <span class="live-status-sub" id="last-updated">Ready</span>
                 </div>
+
+                <button class="btn btn-outline btn-refresh" id="btn-manual-refresh" onclick="fetchAll()" title="Refresh dashboard data">
+                    <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                        <path d="M3 3v5h5"/>
+                        <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
+                        <path d="M16 21h5v-5"/>
+                    </svg>
+                    <span>Refresh</span>
+                </button>
+
+                <button class="btn btn-primary" id="btn-trigger-run" onclick="triggerRun()">
+                    <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polygon points="6 3 20 12 6 21 6 3"/>
+                    </svg>
+                    <span>Run Ingestion</span>
+                </button>
+
+                <button class="btn btn-warning-subtle btn-demo" id="btn-simulate-break" onclick="simulateBreak()" title="Trigger a test DOM drift failure to demonstrate automated schema repair">
+                    <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>
+                        <line x1="12" y1="9" x2="12" y2="13"/>
+                        <line x1="12" y1="17" x2="12.01" y2="17"/>
+                    </svg>
+                    <span>Simulate Schema Drift</span>
+                </button>
             </div>
         </div>
     </header>
 
-    <!-- ═══ Stats Bar ═══ -->
-    <section class="stats-bar" id="stats-bar" aria-label="Dashboard summary">
-        <div class="stat-card" id="stat-total-runs">
-            <div class="stat-value" id="stat-total-val">—</div>
-            <div class="stat-label">Total Runs</div>
-        </div>
-        <div class="stat-card" id="stat-success-rate">
-            <div class="stat-value stat-success" id="stat-success-val">—</div>
-            <div class="stat-label">Success Rate</div>
-        </div>
-        <div class="stat-card" id="stat-heals">
-            <div class="stat-value stat-heal" id="stat-heals-val">—</div>
-            <div class="stat-label">Heals Triggered</div>
-        </div>
-        <div class="stat-card" id="stat-verified">
-            <div class="stat-value stat-verified" id="stat-verified-val">—</div>
-            <div class="stat-label">Verified Fixes</div>
-        </div>
-        <div class="stat-card" id="stat-last-run">
-            <div class="stat-value stat-time" id="stat-lastrun-val">—</div>
-            <div class="stat-label">Last Run</div>
-        </div>
-    </section>
+    <div class="app-container">
+        <!-- ═══ System Health & KPI Metric Strip ═══ -->
+        <section class="kpi-strip" id="stats-bar" aria-label="Pipeline metrics summary">
+            <div class="kpi-card" id="stat-total-runs">
+                <div class="kpi-header">
+                    <span class="kpi-label">Total Ingestion Runs</span>
+                    <svg class="kpi-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                </div>
+                <div class="kpi-value" id="stat-total-val">—</div>
+                <div class="kpi-caption">Scraper pipeline executions</div>
+            </div>
 
-    <!-- ═══ Main Grid ═══ -->
-    <main class="main-grid">
-        <!-- Left Column: Latest Data + Run History -->
-        <div class="column column-left">
+            <div class="kpi-card" id="stat-success-rate">
+                <div class="kpi-header">
+                    <span class="kpi-label">Schema Accuracy Rate</span>
+                    <svg class="kpi-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                </div>
+                <div class="kpi-value kpi-success" id="stat-success-val">—</div>
+                <div class="kpi-caption">Validation pass ratio</div>
+            </div>
 
-            <!-- Panel: Latest Scraped Data -->
-            <section class="panel" id="panel-latest-data">
-                <div class="panel-header">
-                    <h2><span aria-hidden="true">📋</span> Latest Scraped Data</h2>
-                    <div class="panel-header-actions">
-                        <span class="badge badge-count" id="latest-count">0 rows</span>
-                        <button class="btn btn-sm btn-outline" id="btn-export-csv" onclick="exportData('csv')" title="Download as CSV" aria-label="Download data as CSV">
-                            <span aria-hidden="true">📥</span> CSV
-                        </button>
-                        <button class="btn btn-sm btn-outline" id="btn-export-json" onclick="exportData('json')" title="Download as JSON" aria-label="Download data as JSON">
-                            <span aria-hidden="true">📥</span> JSON
-                        </button>
+            <div class="kpi-card" id="stat-heals">
+                <div class="kpi-header">
+                    <span class="kpi-label">Auto-Recoveries</span>
+                    <svg class="kpi-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+                </div>
+                <div class="kpi-value kpi-heal" id="stat-heals-val">—</div>
+                <div class="kpi-caption">Automated repairs triggered</div>
+            </div>
+
+            <div class="kpi-card" id="stat-verified">
+                <div class="kpi-header">
+                    <span class="kpi-label">Verified Fixes</span>
+                    <svg class="kpi-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                </div>
+                <div class="kpi-value kpi-verified" id="stat-verified-val">—</div>
+                <div class="kpi-caption">Successfully applied patches</div>
+            </div>
+
+            <div class="kpi-card" id="stat-last-run">
+                <div class="kpi-header">
+                    <span class="kpi-label">Last Sync</span>
+                    <svg class="kpi-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                </div>
+                <div class="kpi-value kpi-time" id="stat-lastrun-val">—</div>
+                <div class="kpi-caption">Most recent data fetch</div>
+            </div>
+        </section>
+
+        <!-- ═══ Main Workbench Grid ═══ -->
+        <main class="workbench-grid">
+            <!-- Left Column: Extracted Job Data + Execution Timeline -->
+            <div class="workbench-col col-primary">
+                <!-- Panel: Extracted Records -->
+                <section class="panel" id="panel-latest-data">
+                    <div class="panel-header">
+                        <div class="panel-title-group">
+                            <div class="panel-icon-box">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/><path d="M6 6h10"/><path d="M6 10h10"/></svg>
+                            </div>
+                            <div>
+                                <h2>Ingested Job Notifications</h2>
+                                <p class="panel-subtitle">Extracted fields validated against production schema</p>
+                            </div>
+                        </div>
+
+                        <div class="panel-header-actions">
+                            <span class="pill-badge pill-count" id="latest-count">0 records</span>
+                            <div class="btn-group">
+                                <button class="btn btn-sm btn-outline" id="btn-export-csv" onclick="exportData('csv')" title="Export table to CSV">
+                                    <svg class="btn-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                    <span>CSV</span>
+                                </button>
+                                <button class="btn btn-sm btn-outline" id="btn-export-json" onclick="exportData('json')" title="Export table to JSON">
+                                    <svg class="btn-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                    <span>JSON</span>
+                                </button>
+                            </div>
+                        </div>
                     </div>
-                </div>
-                <div class="panel-body" id="latest-data-body">
-                    <div class="empty-state">No data yet — run a scrape to begin.</div>
-                </div>
-            </section>
 
-            <!-- Panel: Run History Timeline -->
-            <section class="panel" id="panel-run-history">
-                <div class="panel-header">
-                    <h2><span aria-hidden="true">📅</span> Run History</h2>
-                </div>
-                <div class="panel-body timeline" id="run-history-body">
-                    <div class="empty-state">No runs yet.</div>
-                </div>
-            </section>
-        </div>
-
-        <!-- Right Column: Self-Healing Events (the money panel) -->
-        <div class="column column-right">
-            <section class="panel panel-heal" id="panel-heal-events">
-                <div class="panel-header">
-                    <h2><span aria-hidden="true">🔧</span> Self-Healing Events</h2>
-                    <span class="badge badge-heal" id="heal-count">0 events</span>
-                </div>
-                <div class="panel-body" id="heal-events-body">
-                    <div class="empty-state">
-                        No heal events yet.<br>
-                        Click <strong>"Simulate Break"</strong> to trigger a demo heal cycle.
+                    <div class="panel-body" id="latest-data-body">
+                        <div class="empty-state">No data loaded. Trigger an ingestion run to view notifications.</div>
                     </div>
-                </div>
-            </section>
-        </div>
-    </main>
+                </section>
 
-    <!-- ═══ Row Detail Modal ═══ -->
+                <!-- Panel: Execution Run History -->
+                <section class="panel" id="panel-run-history">
+                    <div class="panel-header">
+                        <div class="panel-title-group">
+                            <div class="panel-icon-box">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 14 14"/></svg>
+                            </div>
+                            <div>
+                                <h2>Pipeline Run History</h2>
+                                <p class="panel-subtitle">Execution logs, extraction row counts, and error tracking</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="panel-body timeline" id="run-history-body">
+                        <div class="empty-state">No pipeline history recorded yet.</div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Right Column: Self-Healing & Schema Repairs -->
+            <div class="workbench-col col-secondary">
+                <section class="panel panel-heal-log" id="panel-heal-events">
+                    <div class="panel-header">
+                        <div class="panel-title-group">
+                            <div class="panel-icon-box panel-icon-heal">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+                            </div>
+                            <div>
+                                <h2>Auto-Recovery & Selector Repairs</h2>
+                                <p class="panel-subtitle">Automatic diagnostic logs and verified schema fixes</p>
+                            </div>
+                        </div>
+                        <span class="pill-badge pill-heal" id="heal-count">0 events</span>
+                    </div>
+                    <div class="panel-body heal-stream-body" id="heal-events-body">
+                        <div class="empty-state">
+                            <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+                            <p><strong>All extraction selectors are healthy.</strong></p>
+                            <p class="empty-sub">To observe automated recovery, click <strong>"Simulate Schema Drift"</strong> above.</p>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <!-- ═══ Record Detail Modal ═══ -->
     <div class="modal-backdrop" id="row-detail-modal" role="dialog" aria-modal="true" aria-labelledby="modal-row-title" style="display: none;" onclick="handleModalBackdropClick(event)">
         <div class="modal-dialog">
             <div class="modal-header">
-                <h3 id="modal-row-title"><span aria-hidden="true">📋</span> Job Notification Details</h3>
+                <div class="modal-header-left">
+                    <div class="modal-icon-box">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                    </div>
+                    <div>
+                        <h3 id="modal-row-title">Job Notification Inspector</h3>
+                        <p class="modal-subtitle">Extracted metadata & raw field validation</p>
+                    </div>
+                </div>
                 <button class="btn-close-modal" onclick="closeRowModal()" aria-label="Close details modal">&times;</button>
             </div>
             <div class="modal-body" id="modal-row-body">
                 <!-- Dynamically populated -->
             </div>
             <div class="modal-footer">
-                <button class="btn btn-outline btn-sm" onclick="closeRowModal()">Close</button>
+                <button class="btn btn-outline btn-sm" onclick="closeRowModal()">Close Inspector</button>
             </div>
         </div>
     </div>
 
-    <!-- ═══ Toast container ═══ -->
+    <!-- ═══ Toast Notification Container ═══ -->
     <div class="toast-container" id="toast-container" aria-live="polite" aria-atomic="true"></div>
 
-    <script src="app.js"></script>
+    <script src="app.js?v=3.0"></script>
 </body>
 </html>

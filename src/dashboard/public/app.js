@@ -1,17 +1,8 @@
 // ============================================================================
-// app.js — Dashboard client-side logic
+// app.js — Pipeline Console & Data Workbench Logic
 // ============================================================================
-// Vanilla JS — fetches from the Express API, renders the panels,
-// auto-refreshes every 15 seconds, and provides trigger buttons.
-//
-// Features:
-//   - Persistent heal card expansion state across polls
-//   - Client-side pagination, search filtering, and column sorting
-//   - Detail modal for full record inspection (including advt_no)
-//   - Hover tooltips (title) on truncated cells & wrapping for key text
-//   - Skeleton loading states to prevent empty flashes
-//   - Normalized date display (DD MMM YYYY)
-//   - Accessibility (aria-live, aria-labels, aria-hidden for emojis)
+// Real-time monitoring for FreeJobAlert scraper pipeline,
+// data validation telemetry, and automated schema repairs.
 // ============================================================================
 
 const API_BASE = '';
@@ -19,7 +10,7 @@ let refreshInterval = null;
 let countdownSeconds = 15;
 let countdownTimer = null;
 
-// Table & Data State
+// Table & Filter State
 let cachedData = [];
 let filteredData = [];
 let currentPage = 1;
@@ -27,14 +18,53 @@ let pageSize = 10;
 let sortColumn = 'post_date';
 let sortDirection = 'desc';
 let filterQuery = '';
+let activeFilterChip = 'all';
 let isInitialLoad = true;
 let modalTrigger = null;
 
-// Heal Cards State (preserve expansion across auto-refresh)
-let expandedHealCardIds = null;
+// Auto-Recovery Inspector State
+let cachedHealEvents = [];
+let selectedHealEventId = null;
+
+// ---------- SVG Icon Helper ----------
+function getSvgIcon(name, customClass = '') {
+    const cls = customClass ? ` ${customClass}` : '';
+    const baseStyle = 'width:14px;height:14px;display:inline-block;vertical-align:middle;flex-shrink:0;';
+    switch (name) {
+        case 'check':
+            return `<svg class="btn-icon${cls}" style="${baseStyle}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+        case 'check-circle':
+            return `<svg class="btn-icon${cls}" style="${baseStyle}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`;
+        case 'x-circle':
+            return `<svg class="btn-icon${cls}" style="${baseStyle}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`;
+        case 'alert-triangle':
+            return `<svg class="btn-icon${cls}" style="${baseStyle}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`;
+        case 'search':
+            return `<svg class="search-icon-svg${cls}" style="${baseStyle}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`;
+        case 'eye':
+            return `<svg class="btn-icon${cls}" style="width:13px;height:13px;display:inline-block;vertical-align:middle;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>`;
+        case 'external-link':
+            return `<svg class="btn-icon${cls}" style="width:11px;height:11px;display:inline-block;vertical-align:middle;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>`;
+        case 'chevron-down':
+            return `<svg class="heal-chevron-svg${cls}" style="${baseStyle}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>`;
+        case 'sort':
+            return `<svg class="sort-indicator-svg${cls}" style="width:11px;height:11px;display:inline-block;vertical-align:middle;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></svg>`;
+        case 'sort-asc':
+            return `<svg class="sort-indicator-svg${cls}" style="width:11px;height:11px;display:inline-block;vertical-align:middle;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 7-7 7 7"/><line x1="12" y1="19" x2="12" y2="5"/></svg>`;
+        case 'sort-desc':
+            return `<svg class="sort-indicator-svg${cls}" style="width:11px;height:11px;display:inline-block;vertical-align:middle;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 12-7 7-7-7"/><line x1="12" y1="5" x2="12" y2="19"/></svg>`;
+        case 'info':
+            return `<svg class="btn-icon${cls}" style="${baseStyle}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>`;
+        case 'shield':
+            return `<svg class="btn-icon${cls}" style="${baseStyle}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`;
+        case 'wrench':
+            return `<svg class="btn-icon${cls}" style="${baseStyle}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>`;
+        default:
+            return '';
+    }
+}
 
 // ---------- Initialization ----------
-
 document.addEventListener('DOMContentLoaded', () => {
     setupGlobalListeners();
     renderInitialSkeletons();
@@ -72,7 +102,7 @@ function renderInitialSkeletons() {
     const healBody = document.getElementById('heal-events-body');
 
     const skeletonHtml = `
-        <div class="skeleton-container" aria-label="Loading data...">
+        <div class="skeleton-container" aria-label="Loading pipeline data...">
             <div class="skeleton-row"></div>
             <div class="skeleton-row"></div>
             <div class="skeleton-row"></div>
@@ -80,18 +110,9 @@ function renderInitialSkeletons() {
         </div>
     `;
 
-    if (latestBody) {
-        latestBody.classList.add('is-loading');
-        latestBody.innerHTML = skeletonHtml;
-    }
-    if (runBody) {
-        runBody.classList.add('is-loading');
-        runBody.innerHTML = skeletonHtml;
-    }
-    if (healBody) {
-        healBody.classList.add('is-loading');
-        healBody.innerHTML = skeletonHtml;
-    }
+    if (latestBody && !cachedData.length) latestBody.innerHTML = skeletonHtml;
+    if (runBody && !runBody.children.length) runBody.innerHTML = skeletonHtml;
+    if (healBody && !healBody.children.length) healBody.innerHTML = skeletonHtml;
 }
 
 function startCountdown() {
@@ -112,7 +133,7 @@ function startCountdown() {
 function updateCountdownUI() {
     const el = document.getElementById('countdown-timer');
     if (el) {
-        el.textContent = `Auto-refresh in ${countdownSeconds}s`;
+        el.textContent = `Syncing in ${countdownSeconds}s`;
     }
 }
 
@@ -125,15 +146,14 @@ async function fetchAll() {
             fetchHealEvents()
         ]);
     } catch (err) {
-        console.error('Fetch error:', err);
+        console.error('Pipeline data sync error:', err);
     } finally {
         isInitialLoad = false;
         setText('last-updated', `Updated ${formatTime(new Date().toISOString())}`);
     }
 }
 
-// ---------- Stats ----------
-
+// ---------- Telemetry Stats ----------
 async function fetchStats() {
     try {
         const res = await fetch(`${API_BASE}/api/stats`);
@@ -143,7 +163,7 @@ async function fetchStats() {
 
         const successRate = stats.total_runs > 0
             ? Math.round((stats.success_count / stats.total_runs) * 100)
-            : 0;
+            : 100;
         setText('stat-success-val', `${successRate}%`);
 
         setText('stat-heals-val', stats.total_heals || 0);
@@ -151,55 +171,73 @@ async function fetchStats() {
 
         if (stats.last_run) {
             setText('stat-lastrun-val', formatTime(stats.last_run));
+        } else {
+            setText('stat-lastrun-val', 'None');
         }
     } catch (err) {
-        console.error('Failed to fetch stats:', err);
+        console.error('Failed to fetch pipeline stats:', err);
     }
 }
 
-// ---------- Latest Scraped Data ----------
-
+// ---------- Ingested Scraped Data ----------
 async function fetchLatestData() {
     const body = document.getElementById('latest-data-body');
     const countBadge = document.getElementById('latest-count');
 
     try {
-        const res = await fetch(`${API_BASE}/api/runs?limit=1`);
+        const res = await fetch(`${API_BASE}/api/runs?limit=50`);
         const runs = await res.json();
 
-        if (body) body.classList.remove('is-loading');
-
-        // Find the most recent successful run
-        const successRun = runs.find(r => r.status === 'success');
-
-        if (!successRun || !successRun.raw_json) {
+        if (!Array.isArray(runs) || runs.length === 0) {
             cachedData = [];
             filteredData = [];
-            if (body) body.innerHTML = '<div class="empty-state">No successful scrape data yet — run a scrape to begin.</div>';
-            if (countBadge) countBadge.textContent = '0 rows';
+            if (body) body.innerHTML = '<div class="empty-state">No pipeline runs recorded yet. Click "Run Ingestion" to begin.</div>';
+            if (countBadge) countBadge.textContent = '0 records';
             return;
         }
 
-        const data = Array.isArray(successRun.raw_json)
-            ? successRun.raw_json
-            : (successRun.raw_json.results || successRun.raw_json.data || []);
+        const latestSuccessfulRun = runs.find(r => r.status === 'success' && r.raw_json && (Array.isArray(r.raw_json) ? r.raw_json.length > 0 : true));
+
+        if (!latestSuccessfulRun || !latestSuccessfulRun.raw_json) {
+            cachedData = [];
+            filteredData = [];
+            if (body) body.innerHTML = '<div class="empty-state">No successful scrape data found. Click "Run Ingestion" to fetch notifications.</div>';
+            if (countBadge) countBadge.textContent = '0 records';
+            return;
+        }
+
+        const data = Array.isArray(latestSuccessfulRun.raw_json)
+            ? latestSuccessfulRun.raw_json
+            : (latestSuccessfulRun.raw_json.results || latestSuccessfulRun.raw_json.data || []);
 
         cachedData = data;
         applyFilterAndSort();
         renderTable();
     } catch (err) {
         if (body) {
-            body.classList.remove('is-loading');
-            body.innerHTML = `<div class="empty-state" style="color:var(--accent-red)">Failed to load data: ${escapeHtml(err.message)}</div>`;
+            body.innerHTML = `<div class="empty-state" style="color:var(--rose)">Failed to load data: ${escapeHtml(err.message)}</div>`;
         }
-        console.error('Failed to fetch latest data:', err);
+        console.error('Failed to fetch data:', err);
     }
 }
 
 function applyFilterAndSort() {
     let result = [...cachedData];
 
-    // 1. Text Filter
+    if (activeFilterChip !== 'all') {
+        const chip = activeFilterChip.toLowerCase();
+        result = result.filter(row => {
+            const board = String(row.recruitment_board || '').toLowerCase();
+            const post = String(row.post_name || '').toLowerCase();
+            const qual = String(row.qualification || '').toLowerCase();
+            if (chip === 'bank') return board.includes('bank') || board.includes('sbi') || board.includes('ibps');
+            if (chip === 'tech') return board.includes('drdo') || board.includes('bhel') || qual.includes('engg') || qual.includes('degree') || qual.includes('diploma');
+            if (chip === 'psc') return board.includes('court') || board.includes('psc') || board.includes('upsc') || board.includes('ssc');
+            if (chip === 'apprentice') return post.includes('apprentice') || qual.includes('iti');
+            return true;
+        });
+    }
+
     if (filterQuery) {
         const q = filterQuery.toLowerCase();
         result = result.filter(row => {
@@ -211,7 +249,6 @@ function applyFilterAndSort() {
         });
     }
 
-    // 2. Sorting
     if (sortColumn) {
         result.sort((a, b) => {
             let valA = a[sortColumn];
@@ -232,13 +269,12 @@ function applyFilterAndSort() {
 
     filteredData = result;
 
-    // Update count badge
     const countBadge = document.getElementById('latest-count');
     if (countBadge) {
-        if (filterQuery && filteredData.length !== cachedData.length) {
-            countBadge.textContent = `${filteredData.length} of ${cachedData.length} rows`;
+        if ((filterQuery || activeFilterChip !== 'all') && filteredData.length !== cachedData.length) {
+            countBadge.textContent = `${filteredData.length} of ${cachedData.length} records`;
         } else {
-            countBadge.textContent = `${cachedData.length} row${cachedData.length !== 1 ? 's' : ''}`;
+            countBadge.textContent = `${cachedData.length} record${cachedData.length !== 1 ? 's' : ''}`;
         }
     }
 }
@@ -250,92 +286,91 @@ function renderTable() {
     const filterHadFocus = document.activeElement?.id === 'table-filter-input';
 
     if (cachedData.length === 0) {
-        body.innerHTML = '<div class="empty-state">No successful scrape data yet — run a scrape to begin.</div>';
+        body.innerHTML = '<div class="empty-state">No scraped data available. Trigger an ingestion run to fetch notifications.</div>';
         return;
     }
 
-    // Pagination calculations
     const totalRows = filteredData.length;
     const effectivePageSize = pageSize === 'all' ? totalRows : parseInt(pageSize, 10);
     const totalPages = effectivePageSize > 0 ? Math.max(1, Math.ceil(totalRows / effectivePageSize)) : 1;
 
-    if (currentPage > totalPages) {
-        currentPage = totalPages;
-    }
-    if (currentPage < 1) {
-        currentPage = 1;
-    }
+    if (currentPage > totalPages) currentPage = totalPages;
+    if (currentPage < 1) currentPage = 1;
 
     const startIdx = (currentPage - 1) * effectivePageSize;
     const endIdx = effectivePageSize === totalRows ? totalRows : Math.min(startIdx + effectivePageSize, totalRows);
     const pageRows = filteredData.slice(startIdx, endIdx);
 
-    // Build Toolbar HTML
     let html = `
-        <div class="table-toolbar">
-            <div class="search-box">
-                <span class="search-icon" aria-hidden="true">🔍</span>
-                <input
-                    type="text"
-                    class="search-input"
-                    id="table-filter-input"
-                    placeholder="Filter by post name, board, or qualification..."
-                    value="${escapeHtml(filterQuery)}"
-                    oninput="handleTableFilter(this.value)"
-                    aria-label="Filter scraped data"
-                >
-                <button
-                    class="btn-clear-filter"
-                    id="btn-clear-filter"
-                    onclick="clearTableFilter()"
-                    aria-label="Clear search filter"
-                    title="Clear filter"
-                    style="display: ${filterQuery ? 'flex' : 'none'};"
-                >✕</button>
+        <div class="table-toolbar-wrapper">
+            <div class="table-toolbar">
+                <div class="search-box">
+                    ${getSvgIcon('search')}
+                    <input
+                        type="text"
+                        class="search-input"
+                        id="table-filter-input"
+                        placeholder="Search positions, boards, qualifications..."
+                        value="${escapeHtml(filterQuery)}"
+                        oninput="handleTableFilter(this.value)"
+                        aria-label="Filter job notifications"
+                    >
+                    <button
+                        class="btn-clear-filter"
+                        id="btn-clear-filter"
+                        onclick="clearTableFilter()"
+                        aria-label="Clear filter"
+                        style="display: ${filterQuery ? 'flex' : 'none'};"
+                    >&times;</button>
+                </div>
+            </div>
+            <div class="filter-preset-chips">
+                <button class="chip-filter ${activeFilterChip === 'all' ? 'active' : ''}" onclick="setFilterChip('all')">All Records</button>
+                <button class="chip-filter ${activeFilterChip === 'bank' ? 'active' : ''}" onclick="setFilterChip('bank')">Banking / Finance</button>
+                <button class="chip-filter ${activeFilterChip === 'tech' ? 'active' : ''}" onclick="setFilterChip('tech')">Engineering / Tech</button>
+                <button class="chip-filter ${activeFilterChip === 'psc' ? 'active' : ''}" onclick="setFilterChip('psc')">Courts & PSC</button>
+                <button class="chip-filter ${activeFilterChip === 'apprentice' ? 'active' : ''}" onclick="setFilterChip('apprentice')">Apprenticeships</button>
             </div>
         </div>
     `;
 
     if (totalRows === 0) {
-        html += `<div class="empty-state">No matching job notifications found for "<strong>${escapeHtml(filterQuery)}</strong>".</div>`;
+        html += `<div class="empty-state">No matching job records found for current filters.</div>`;
         body.innerHTML = html;
         return;
     }
 
-    // Sort column helper
     function renderTh(colKey, label, cssClass = '') {
         const isSorted = sortColumn === colKey;
         const activeClass = isSorted ? ' sort-active' : '';
-        const sortIcon = isSorted ? (sortDirection === 'asc' ? ' ▲' : ' ▼') : ' ↕';
+        const sortIcon = isSorted ? (sortDirection === 'asc' ? getSvgIcon('sort-asc') : getSvgIcon('sort-desc')) : getSvgIcon('sort');
         const ariaSort = isSorted ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none';
         return `
             <th
                 class="sortable${activeClass} ${cssClass}"
                 onclick="handleSort('${colKey}')"
                 aria-sort="${ariaSort}"
-                title="Sort by ${label}"
                 role="columnheader"
                 tabindex="0"
                 onkeydown="if(event.key==='Enter'||event.key===' ') handleSort('${colKey}')"
             >
-                ${label}<span class="sort-indicator" aria-hidden="true">${sortIcon}</span>
+                ${label}${sortIcon}
             </th>
         `;
     }
 
-    // Build Table
     html += `
         <div class="table-responsive">
             <table class="data-table" role="table">
                 <thead>
                     <tr role="row">
-                        ${renderTh('post_date', 'Date', 'col-date')}
-                        ${renderTh('recruitment_board', 'Board', 'col-board')}
-                        ${renderTh('post_name', 'Post Name', 'col-post')}
-                        ${renderTh('qualification', 'Qualification', 'col-qualification')}
-                        ${renderTh('last_date', 'Last Date', 'col-lastdate')}
-                        <th class="col-url">Details</th>
-                        <th class="col-actions" title="View full row details"><span aria-hidden="true">👁️</span></th>
+                        ${renderTh('post_date', 'Posted', 'col-post-date')}
+                        ${renderTh('recruitment_board', 'Board / Org', 'col-recruitment-board')}
+                        ${renderTh('post_name', 'Position / Post Name', 'col-post-title')}
+                        ${renderTh('qualification', 'Eligibility', 'col-eligibility')}
+                        ${renderTh('last_date', 'Deadline', 'col-last-date')}
+                        <th class="col-source-url">Source</th>
+                        <th class="col-inspect-btn" title="Inspect Record"></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -351,18 +386,18 @@ function renderTable() {
         const url = row.detail_url || '';
 
         html += `
-            <tr role="row" tabindex="0" onclick="openRowModal(${globalRowIndex})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openRowModal(${globalRowIndex})}" title="Open row details">
-                <td data-label="Post date" class="cell-date col-date" title="${escapeHtml(String(row.post_date || '—'))}">${escapeHtml(postDate)}</td>
-                <td data-label="Board" class="cell-board cell-wrap col-board" title="${escapeHtml(board)}">${escapeHtml(board)}</td>
-                <td data-label="Post name" class="cell-post cell-wrap col-post" title="${escapeHtml(postName)}">${escapeHtml(postName)}</td>
-                <td data-label="Qualification" class="cell-qual cell-wrap col-qualification" title="${escapeHtml(qual)}">${escapeHtml(qual)}</td>
-                <td data-label="Last date" class="cell-date col-lastdate" title="${escapeHtml(String(row.last_date || '—'))}">${escapeHtml(lastDate)}</td>
-                <td data-label="Details" class="url-cell col-url" onclick="event.stopPropagation()">
-                    ${url ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(url)}">${escapeHtml(truncate(url, 26))}</a>` : '—'}
+            <tr role="row" tabindex="0" onclick="openRowModal(${globalRowIndex})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openRowModal(${globalRowIndex})}">
+                <td class="cell-date col-post-date" title="${escapeHtml(String(row.post_date || '—'))}">${escapeHtml(postDate)}</td>
+                <td class="cell-board col-recruitment-board" title="${escapeHtml(board)}">${escapeHtml(board)}</td>
+                <td class="cell-post col-post-title" title="${escapeHtml(postName)}">${escapeHtml(postName)}</td>
+                <td class="cell-qual col-eligibility" title="${escapeHtml(qual)}">${escapeHtml(qual)}</td>
+                <td class="cell-date col-last-date" title="${escapeHtml(String(row.last_date || '—'))}">${escapeHtml(lastDate)}</td>
+                <td class="col-source-url" onclick="event.stopPropagation()">
+                    ${url ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(url)}">Link ${getSvgIcon('external-link')}</a>` : '—'}
                 </td>
-                <td data-label="Open" class="col-actions" onclick="event.stopPropagation()">
-                    <button class="btn-view-row" onclick="openRowModal(${globalRowIndex})" aria-label="View details for ${escapeHtml(postName)}" title="View details">
-                        👁️
+                <td class="col-inspect-btn" onclick="event.stopPropagation()">
+                    <button class="btn-view-row" onclick="openRowModal(${globalRowIndex})" aria-label="View record details" title="View details">
+                        ${getSvgIcon('eye')}
                     </button>
                 </td>
             </tr>
@@ -375,14 +410,13 @@ function renderTable() {
         </div>
     `;
 
-    // Build Pagination Controls
-    const displayStart = startIdx + 1;
+    const displayStart = totalRows === 0 ? 0 : startIdx + 1;
     const displayEnd = endIdx;
 
     html += `
         <div class="pagination-container" role="navigation" aria-label="Data table pagination">
             <div class="pagination-info">
-                Showing ${displayStart}–${displayEnd} of ${totalRows} rows
+                Showing <strong class="pagination-num">${displayStart}–${displayEnd}</strong> of <strong class="pagination-num">${totalRows}</strong> records
             </div>
             <div class="pagination-controls">
                 <button
@@ -394,7 +428,12 @@ function renderTable() {
                 >
                     &larr; Prev
                 </button>
-                <span class="pagination-page">Page ${currentPage} of ${totalPages}</span>
+                <div class="pagination-page-badge">
+                    <span>Page</span>
+                    <span class="pagination-page-current">${currentPage}</span>
+                    <span class="pagination-page-divider">/</span>
+                    <span class="pagination-page-total">${totalPages}</span>
+                </div>
                 <button
                     class="pagination-btn"
                     id="btn-next-page"
@@ -404,17 +443,19 @@ function renderTable() {
                 >
                     Next &rarr;
                 </button>
-                <select
-                    class="pagination-size-select"
-                    id="pagination-size-select"
-                    onchange="changePageSize(this.value)"
-                    aria-label="Rows per page"
-                >
-                    <option value="10" ${pageSize === 10 ? 'selected' : ''}>10 / page</option>
-                    <option value="25" ${pageSize === 25 ? 'selected' : ''}>25 / page</option>
-                    <option value="50" ${pageSize === 50 ? 'selected' : ''}>50 / page</option>
-                    <option value="all" ${pageSize === 'all' ? 'selected' : ''}>All rows</option>
-                </select>
+                <div class="pagination-select-wrap">
+                    <select
+                        class="pagination-size-select"
+                        id="pagination-size-select"
+                        onchange="changePageSize(this.value)"
+                        aria-label="Rows per page"
+                    >
+                        <option value="10" ${pageSize === 10 ? 'selected' : ''}>10 / page</option>
+                        <option value="25" ${pageSize === 25 ? 'selected' : ''}>25 / page</option>
+                        <option value="50" ${pageSize === 50 ? 'selected' : ''}>50 / page</option>
+                        <option value="all" ${pageSize === 'all' ? 'selected' : ''}>All</option>
+                    </select>
+                </div>
             </div>
         </div>
     `;
@@ -430,14 +471,19 @@ function renderTable() {
     }
 }
 
-// Table Handlers
+function setFilterChip(chip) {
+    activeFilterChip = chip;
+    currentPage = 1;
+    applyFilterAndSort();
+    renderTable();
+}
+
 function handleTableFilter(val) {
     filterQuery = (val || '').trim();
     currentPage = 1;
     applyFilterAndSort();
     renderTable();
 
-    // Maintain input focus and cursor position after re-rendering
     const input = document.getElementById('table-filter-input');
     if (input) {
         input.focus();
@@ -452,12 +498,12 @@ function clearTableFilter() {
     renderTable();
 }
 
-function handleSort(column) {
-    if (sortColumn === column) {
+function handleSort(colKey) {
+    if (sortColumn === colKey) {
         sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
     } else {
-        sortColumn = column;
-        sortDirection = column.includes('date') ? 'desc' : 'asc';
+        sortColumn = colKey;
+        sortDirection = 'asc';
     }
     applyFilterAndSort();
     renderTable();
@@ -474,61 +520,52 @@ function changePageSize(size) {
     renderTable();
 }
 
-// ---------- Detail Modal ----------
-
-function openRowModal(rowIndex) {
-    const row = filteredData[rowIndex];
+// ---------- Row Modal Inspector ----------
+function openRowModal(index) {
+    const row = filteredData[index];
     if (!row) return;
 
     const modal = document.getElementById('row-detail-modal');
-    const modalBody = document.getElementById('modal-row-body');
-    if (!modal || !modalBody) return;
+    const body = document.getElementById('modal-row-body');
+    if (!modal || !body) return;
 
     const postDate = formatDateDisplay(row.post_date);
     const lastDate = formatDateDisplay(row.last_date);
-    const rawPostDate = row.post_date ? String(row.post_date) : '—';
-    const rawLastDate = row.last_date ? String(row.last_date) : '—';
 
-    modalBody.innerHTML = `
+    body.innerHTML = `
         <div class="modal-field">
-            <div class="modal-field-label">Post Name / Title</div>
-            <div class="modal-field-value" style="font-weight: 600; font-size: 0.95rem;">${escapeHtml(row.post_name || '—')}</div>
+            <div class="modal-field-label">Position / Post Name</div>
+            <div class="modal-field-value" style="font-weight:600;font-size:0.95rem;color:#38bdf8;">${escapeHtml(row.post_name || '—')}</div>
         </div>
 
         <div class="modal-field">
-            <div class="modal-field-label">Recruitment Board</div>
-            <div class="modal-field-value highlight-board">${escapeHtml(row.recruitment_board || '—')}</div>
+            <div class="modal-field-label">Recruitment Board / Organization</div>
+            <div class="modal-field-value">${escapeHtml(row.recruitment_board || '—')}</div>
         </div>
 
         <div class="modal-grid-2">
             <div class="modal-field">
-                <div class="modal-field-label">Post Date</div>
-                <div class="modal-field-value highlight-date">
-                    ${escapeHtml(postDate)}
-                    ${postDate !== rawPostDate && rawPostDate !== '—' ? `<span style="color:var(--text-muted);font-size:0.75rem;"> (Raw: ${escapeHtml(rawPostDate)})</span>` : ''}
-                </div>
+                <div class="modal-field-label">Date of Notification</div>
+                <div class="modal-field-value">${escapeHtml(postDate)}</div>
             </div>
             <div class="modal-field">
-                <div class="modal-field-label">Last Date (Deadline)</div>
-                <div class="modal-field-value highlight-date">
-                    ${escapeHtml(lastDate)}
-                    ${lastDate !== rawLastDate && rawLastDate !== '—' ? `<span style="color:var(--text-muted);font-size:0.75rem;"> (Raw: ${escapeHtml(rawLastDate)})</span>` : ''}
-                </div>
+                <div class="modal-field-label">Application Deadline</div>
+                <div class="modal-field-value">${escapeHtml(lastDate)}</div>
             </div>
         </div>
 
         <div class="modal-field">
-            <div class="modal-field-label">Advertisement No. (Advt No)</div>
-            <div class="modal-field-value highlight-advt">${escapeHtml(row.advt_no || 'None specified')}</div>
+            <div class="modal-field-label">Advertisement ID / Notice Number</div>
+            <div class="modal-field-value">${escapeHtml(row.advt_no || 'Not specified')}</div>
         </div>
 
         <div class="modal-field">
-            <div class="modal-field-label">Qualification Required</div>
+            <div class="modal-field-label">Eligibility / Educational Qualifications</div>
             <div class="modal-field-value">${escapeHtml(row.qualification || '—')}</div>
         </div>
 
         <div class="modal-field">
-            <div class="modal-field-label">Detail URL</div>
+            <div class="modal-field-label">Official Listing Source URL</div>
             <div class="modal-field-value">
                 ${row.detail_url
                     ? `<a href="${escapeHtml(row.detail_url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(row.detail_url)}</a>`
@@ -540,8 +577,8 @@ function openRowModal(rowIndex) {
 
     modalTrigger = document.activeElement;
     modal.style.display = 'flex';
-    const closeButton = modal.querySelector('.btn-close-modal');
-    if (closeButton) closeButton.focus();
+    const closeBtn = modal.querySelector('.btn-close-modal');
+    if (closeBtn) closeBtn.focus();
 }
 
 function closeRowModal() {
@@ -562,39 +599,43 @@ function handleModalBackdropClick(event) {
 }
 
 // ---------- Run History Timeline ----------
-
 async function fetchRunHistory() {
     const body = document.getElementById('run-history-body');
 
     try {
-        const res = await fetch(`${API_BASE}/api/runs?limit=30`);
+        const res = await fetch(`${API_BASE}/api/runs?limit=25`);
         const runs = await res.json();
-
-        if (body) body.classList.remove('is-loading');
 
         if (!body) return;
 
         if (runs.length === 0) {
-            body.innerHTML = '<div class="empty-state">No runs yet.</div>';
+            body.innerHTML = '<div class="empty-state">No pipeline history recorded yet.</div>';
             return;
         }
 
         let html = '';
         runs.forEach(run => {
-            const statusIcon = getStatusIcon(run.status);
-            const statusClass = getStatusClass(run.status);
-            const statusBadge = getStatusBadge(run.status);
+            const isSuccess = run.status === 'success';
+            const isHealed = run.status === 'validation_failed';
+            const statusClass = isSuccess ? 'success' : isHealed ? 'fail' : 'error';
+            const statusLabel = isSuccess ? 'Schema Verified' : isHealed ? 'Anomaly Detected' : 'Error / Timeout';
+            const statusIcon = isSuccess ? getSvgIcon('check') : isHealed ? getSvgIcon('wrench') : getSvgIcon('alert-triangle');
 
             html += `
                 <div class="timeline-item">
-                    <div class="timeline-icon ${statusClass}" aria-hidden="true">${statusIcon}</div>
+                    <div class="timeline-status-icon ${statusClass}">
+                        ${statusIcon}
+                    </div>
                     <div class="timeline-content">
-                        <div class="timeline-title">
-                            Run #${run.id} ${statusBadge}
-                            <span style="color:var(--text-muted);font-weight:400;"> — ${run.row_count} rows</span>
+                        <div class="timeline-header-line">
+                            <div class="timeline-title">Run #${run.id}</div>
+                            <span class="badge-status ${statusClass}">${statusLabel}</span>
                         </div>
-                        <div class="timeline-meta">${formatTime(run.timestamp)}</div>
-                        ${run.error_message ? `<div class="timeline-error">${escapeHtml(truncate(run.error_message, 150))}</div>` : ''}
+                        <div class="timeline-details">
+                            Extracted <strong>${run.row_count || 0}</strong> job notifications &bull;
+                            <span class="timeline-meta">${formatTime(run.timestamp)}</span>
+                        </div>
+                        ${run.error_message ? `<div class="timeline-error-box">${escapeHtml(truncate(run.error_message, 180))}</div>` : ''}
                     </div>
                 </div>
             `;
@@ -603,277 +644,274 @@ async function fetchRunHistory() {
         body.innerHTML = html;
     } catch (err) {
         if (body) {
-            body.classList.remove('is-loading');
-            body.innerHTML = `<div class="empty-state" style="color:var(--accent-red)">Failed to load run history: ${escapeHtml(err.message)}</div>`;
+            body.innerHTML = `<div class="empty-state" style="color:var(--rose)">Failed to load timeline: ${escapeHtml(err.message)}</div>`;
         }
         console.error('Failed to fetch run history:', err);
     }
 }
 
-// ---------- Self-Healing Events (Preserving Card State) ----------
-
+// ---------- Auto-Recovery & Schema Repair Inspector (Right Column) ----------
 async function fetchHealEvents() {
     const body = document.getElementById('heal-events-body');
     const countBadge = document.getElementById('heal-count');
 
     try {
-        const res = await fetch(`${API_BASE}/api/heal-events`);
+        const res = await fetch(`${API_BASE}/api/heal-events?limit=20`);
         const events = await res.json();
 
-        if (body) body.classList.remove('is-loading');
+        cachedHealEvents = Array.isArray(events) ? events : [];
 
         if (countBadge) {
-            countBadge.textContent = `${events.length} event${events.length !== 1 ? 's' : ''}`;
+            countBadge.textContent = `${cachedHealEvents.length} recovery events`;
         }
 
         if (!body) return;
 
-        if (events.length === 0) {
+        if (cachedHealEvents.length === 0) {
             body.innerHTML = `
                 <div class="empty-state">
-                    No heal events yet.<br>
-                    Click <strong>"Simulate Break"</strong> to trigger a demo heal cycle.
+                    <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+                    <p><strong>All extraction selectors are healthy.</strong></p>
+                    <p class="empty-sub">Click <strong>"Simulate Schema Drift"</strong> to test automated recovery.</p>
                 </div>
             `;
             return;
         }
 
-        // Initialize expanded set on first load with the first item open
-        if (expandedHealCardIds === null) {
-            expandedHealCardIds = new Set();
-            if (events.length > 0) {
-                expandedHealCardIds.add(events[0].id);
-            }
+        // Set default selected event (latest verified or latest event)
+        if (!selectedHealEventId || !cachedHealEvents.some(e => e.id === selectedHealEventId)) {
+            const firstVerified = cachedHealEvents.find(e => e.verified);
+            selectedHealEventId = firstVerified ? firstVerified.id : cachedHealEvents[0].id;
         }
 
-        let html = '';
-        events.forEach((event) => {
-            const isVerified = event.verified;
-            const isApproved = event.approved;
-            const isExpanded = expandedHealCardIds.has(event.id);
+        renderHealInspector();
+    } catch (err) {
+        if (body) {
+            body.innerHTML = `<div class="empty-state" style="color:var(--rose)">Failed to load recovery events: ${escapeHtml(err.message)}</div>`;
+        }
+        console.error('Failed to fetch heal events:', err);
+    }
+}
 
-            html += `
-                <div class="heal-card${isExpanded ? ' expanded' : ''}" id="heal-card-${event.id}" onclick="toggleHealCard(${event.id})">
-                    <div class="heal-card-header" role="button" aria-expanded="${isExpanded}" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.stopPropagation();toggleHealCard(${event.id});}">
-                        <div class="heal-card-header-left">
-                            <span class="heal-number">#${event.id}</span>
-                            <div>
-                                <div class="heal-card-title">
-                                    ${isVerified ? '✅ Healed & Verified' : isApproved ? '⚠️ Approved (Unverified)' : '🔄 Heal Attempted'}
-                                </div>
-                                <div class="heal-card-time">${formatTime(event.timestamp)} — Run #${event.run_id}</div>
-                            </div>
-                        </div>
-                        <span class="heal-expand-icon" aria-hidden="true">▼</span>
+function selectHealEvent(id) {
+    selectedHealEventId = id;
+    renderHealInspector();
+}
+
+function renderHealInspector() {
+    const body = document.getElementById('heal-events-body');
+    if (!body || cachedHealEvents.length === 0) return;
+
+    const currentEvent = cachedHealEvents.find(e => e.id === selectedHealEventId) || cachedHealEvents[0];
+    const isVerified = Boolean(currentEvent.verified);
+    const previewObj = typeof currentEvent.preview_result === 'object' && currentEvent.preview_result !== null ? currentEvent.preview_result : {};
+    const selectorsMap = previewObj.selectors || null;
+
+    let html = `
+        <div class="heal-inspector-container">
+            <!-- Event Tabs Selector Strip -->
+            <div class="heal-event-tabs" role="tablist" aria-label="Recovery event tabs">
+    `;
+
+    cachedHealEvents.forEach(e => {
+        const isActive = e.id === currentEvent.id;
+        const eVerified = Boolean(e.verified);
+        html += `
+            <button
+                class="heal-event-tab-btn ${isActive ? 'active' : ''}"
+                role="tab"
+                aria-selected="${isActive}"
+                onclick="selectHealEvent(${e.id})"
+                title="Event #${e.id} (${eVerified ? 'Verified' : 'Anomaly'})"
+            >
+                <span class="heal-tab-dot ${eVerified ? 'verified' : 'unverified'}"></span>
+                <span>#${e.id}</span>
+                ${isActive ? `<span style="font-size:0.65rem;opacity:0.8;">(${eVerified ? 'Verified' : 'Anomaly'})</span>` : ''}
+            </button>
+        `;
+    });
+
+    html += `
+            </div>
+
+            <!-- Active Selected Event Card -->
+            <div class="heal-detail-card">
+                <div class="heal-detail-header">
+                    <div class="heal-detail-title-group">
+                        <span class="heal-detail-id">Event #${currentEvent.id}</span>
+                        <span class="badge-status ${isVerified ? 'success' : 'error'}">
+                            ${isVerified ? '✓ Verified Patch Applied' : '⚠ Selector Anomaly Diagnosed'}
+                        </span>
                     </div>
-                    <div class="heal-card-body" onclick="event.stopPropagation()">
-                        <div class="heal-steps">
-                            <!-- Step 1: Detected Break -->
-                            <div class="heal-step">
-                                <div class="heal-step-marker step-detect">1</div>
-                                <div class="heal-step-content">
-                                    <div class="heal-step-label"><span aria-hidden="true">🔍</span> Break Detected</div>
-                                    <div class="heal-step-value">${escapeHtml(truncate(event.failure_description, 300))}</div>
-                                </div>
-                            </div>
+                    <div class="heal-detail-time">
+                        ${formatTime(currentEvent.timestamp)} &bull; Run #${currentEvent.run_id}
+                    </div>
+                </div>
 
-                            <!-- Step 2: Generated Heal Prompt -->
-                            <div class="heal-step">
-                                <div class="heal-step-marker step-prompt">2</div>
-                                <div class="heal-step-content">
-                                    <div class="heal-step-label"><span aria-hidden="true">💬</span> Heal Prompt Sent</div>
-                                    <div class="code-block">${escapeHtml(event.heal_prompt)}</div>
-                                </div>
-                            </div>
-
-                            <!-- Step 3: Preview / Diff -->
-                            <div class="heal-step">
-                                <div class="heal-step-marker step-preview">3</div>
-                                <div class="heal-step-content">
-                                    <div class="heal-step-label"><span aria-hidden="true">📄</span> Preview Result</div>
-                                    <div class="code-block">${formatPreview(event.preview_result)}</div>
-                                </div>
-                            </div>
-
-                            <!-- Step 4: Approval -->
-                            <div class="heal-step">
-                                <div class="heal-step-marker step-approve">4</div>
-                                <div class="heal-step-content">
-                                    <div class="heal-step-label"><span aria-hidden="true">✅</span> Approval</div>
-                                    <div class="heal-step-value">
-                                        ${isApproved
-                                            ? '<span class="badge badge-success">Approved</span>'
-                                            : '<span class="badge badge-fail">Not Approved</span>'
-                                        }
+                <div class="heal-detail-body">
+                    <div class="repair-steps">
+                        <!-- Step 1: Diagnostics -->
+                        <div class="repair-step">
+                            <div class="repair-step-num">1</div>
+                            <div class="repair-step-content">
+                                <div class="repair-step-header">
+                                    <div class="repair-step-title">
+                                        ${getSvgIcon('alert-triangle')} Anomaly Diagnostics
                                     </div>
                                 </div>
+                                <div class="repair-step-desc">${escapeHtml(currentEvent.failure_description || 'Selector schema mismatch detected.')}</div>
                             </div>
+                        </div>
 
-                            <!-- Step 5: Before / After Diff -->
-                            <div class="heal-step">
-                                <div class="heal-step-marker step-verify">5</div>
-                                <div class="heal-step-content">
-                                    <div class="heal-step-label"><span aria-hidden="true">🔀</span> Before / After Comparison</div>
-                                    <div class="diff-container">
-                                        <div class="diff-column diff-before">
-                                            <div class="diff-header"><span aria-hidden="true">❌</span> Before (Broken)</div>
-                                            <div class="diff-body">${formatSnapshot(event.before_snapshot)}</div>
-                                        </div>
-                                        <div class="diff-column diff-after">
-                                            <div class="diff-header"><span aria-hidden="true">${isVerified ? '✅' : '❓'}</span> After (${isVerified ? 'Fixed' : 'Pending'})</div>
-                                            <div class="diff-body">${formatSnapshot(event.after_snapshot)}</div>
-                                        </div>
+                        <!-- Step 2: Selector Re-alignment -->
+                        <div class="repair-step">
+                            <div class="repair-step-num">2</div>
+                            <div class="repair-step-content">
+                                <div class="repair-step-header">
+                                    <div class="repair-step-title">
+                                        ${getSvgIcon('wrench')} Selector Re-alignment
+                                    </div>
+                                </div>
+                                ${selectorsMap ? `
+                                    <div class="selector-map-grid">
+                                        ${Object.entries(selectorsMap).map(([field, selector]) => `
+                                            <div class="selector-map-item">
+                                                <span class="selector-field-name">${escapeHtml(field)}</span>
+                                                <span class="selector-css-rule">${escapeHtml(selector)}</span>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                ` : `
+                                    <div class="repair-step-desc" style="font-family:var(--font-mono);font-size:0.7rem;">
+                                        ${escapeHtml(truncate(currentEvent.heal_prompt, 200))}
+                                    </div>
+                                `}
+                            </div>
+                        </div>
+
+                        <!-- Step 3: Verification Check -->
+                        <div class="repair-step">
+                            <div class="repair-step-num">3</div>
+                            <div class="repair-step-content">
+                                <div class="repair-step-header">
+                                    <div class="repair-step-title">
+                                        ${getSvgIcon('shield')} Verification Test Results
+                                    </div>
+                                    <span class="badge-status ${isVerified ? 'success' : 'error'}">
+                                        ${isVerified ? '100% Passed' : 'Pending Verification'}
+                                    </span>
+                                </div>
+                                <div class="repair-step-desc">
+                                    ${isVerified
+                                        ? 'Target schema validated successfully. All mandatory fields extracted without data loss.'
+                                        : (previewObj.error ? `Status: ${escapeHtml(previewObj.error)}` : 'Schema patch generated — awaiting verification run.')
+                                    }
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Step 4: Before / After Data Diff -->
+                        <div class="repair-step">
+                            <div class="repair-step-num">4</div>
+                            <div class="repair-step-content">
+                                <div class="repair-step-header">
+                                    <div class="repair-step-title">Data Snapshot Comparison</div>
+                                </div>
+                                <div class="diff-grid">
+                                    <div class="diff-panel diff-panel-broken">
+                                        <div class="diff-panel-title">Before (Broken Extraction)</div>
+                                        <div class="diff-panel-content">${formatSnapshot(currentEvent.before_snapshot)}</div>
+                                    </div>
+                                    <div class="diff-panel diff-panel-fixed">
+                                        <div class="diff-panel-title">After (${isVerified ? 'Repaired & Validated' : 'Pending'})</div>
+                                        <div class="diff-panel-content">${currentEvent.after_snapshot ? formatSnapshot(currentEvent.after_snapshot) : 'Pending next pipeline execution'}</div>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
-            `;
-        });
+            </div>
+        </div>
+    `;
 
-        body.innerHTML = html;
-    } catch (err) {
-        if (body) {
-            body.classList.remove('is-loading');
-            body.innerHTML = `<div class="empty-state" style="color:var(--accent-red)">Failed to load heal events: ${escapeHtml(err.message)}</div>`;
-        }
-        console.error('Failed to fetch heal events:', err);
-    }
-}
-
-function toggleHealCard(id) {
-    if (!expandedHealCardIds) expandedHealCardIds = new Set();
-
-    const card = document.getElementById(`heal-card-${id}`);
-    if (card) {
-        const isNowExpanded = card.classList.toggle('expanded');
-        const header = card.querySelector('.heal-card-header');
-        if (header) header.setAttribute('aria-expanded', isNowExpanded);
-
-        if (isNowExpanded) {
-            expandedHealCardIds.add(id);
-        } else {
-            expandedHealCardIds.delete(id);
-        }
-    } else {
-        if (expandedHealCardIds.has(id)) {
-            expandedHealCardIds.delete(id);
-        } else {
-            expandedHealCardIds.add(id);
-        }
-    }
+    body.innerHTML = html;
 }
 
 // ---------- Action Handlers ----------
-
 async function triggerRun() {
     const btn = document.getElementById('btn-trigger-run');
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner"></span> Running...';
-
-    // Show loading indicator on panels
-    const latestBody = document.getElementById('latest-data-body');
-    const runBody = document.getElementById('run-history-body');
-    if (latestBody) latestBody.classList.add('is-loading');
-    if (runBody) runBody.classList.add('is-loading');
+    btn.innerHTML = '<span class="spinner"></span> Running Pipeline...';
 
     try {
-        showToast('🔄 Triggering scrape...', 'info');
+        showToast('Initiating scraper execution...', 'info');
         const res = await fetch(`${API_BASE}/api/trigger-run`, { method: 'POST' });
         const data = await res.json();
 
         if (data.ok) {
-            showToast(`✅ Scrape complete: ${data.result.status}`, 'success');
+            showToast(`Ingestion complete: ${data.result.status}`, 'success');
         } else {
-            showToast(`❌ Scrape failed: ${data.error}`, 'error');
+            showToast(`Pipeline execution failed: ${data.error}`, 'error');
         }
     } catch (err) {
-        showToast(`❌ Error: ${err.message}`, 'error');
+        showToast(`Execution error: ${err.message}`, 'error');
     } finally {
         btn.disabled = false;
-        btn.innerHTML = '<span class="btn-icon" aria-hidden="true">▶</span> Run Scrape';
+        btn.innerHTML = `
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="6 3 20 12 6 21 6 3"/>
+            </svg>
+            <span>Run Ingestion</span>
+        `;
         fetchAll();
     }
 }
 
 async function simulateBreak() {
-    if (!window.confirm('Simulate a scraper break and create a test heal event?')) {
+    if (!window.confirm('Trigger a simulated DOM shift test to observe automated schema recovery?')) {
         return;
     }
 
     const btn = document.getElementById('btn-simulate-break');
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner"></span> Simulating...';
-
-    const healBody = document.getElementById('heal-events-body');
-    const runBody = document.getElementById('run-history-body');
-    if (healBody) healBody.classList.add('is-loading');
-    if (runBody) runBody.classList.add('is-loading');
+    btn.innerHTML = '<span class="spinner"></span> Simulating Drift...';
 
     try {
-        showToast('💥 Simulating scraper break...', 'info');
+        showToast('Simulating selector drift & triggering auto-recovery...', 'info');
         const res = await fetch(`${API_BASE}/api/simulate-break`, { method: 'POST' });
         const data = await res.json();
 
         if (data.ok) {
-            showToast('🔧 Break simulated! Check the Self-Healing Events panel.', 'success');
-            // Ensure the newly triggered heal card gets expanded
+            showToast('Recovery cycle executed successfully. Schema restored.', 'success');
             if (data.healEventId) {
-                if (!expandedHealCardIds) expandedHealCardIds = new Set();
-                expandedHealCardIds.add(data.healEventId);
+                selectedHealEventId = data.healEventId;
             }
         } else {
-            showToast(`❌ Simulation failed: ${data.error}`, 'error');
+            showToast(`Simulation failed: ${data.error}`, 'error');
         }
     } catch (err) {
-        showToast(`❌ Error: ${err.message}`, 'error');
+        showToast(`Simulation error: ${err.message}`, 'error');
     } finally {
         btn.disabled = false;
-        btn.innerHTML = '<span class="btn-icon" aria-hidden="true">💥</span> Simulate Break';
+        btn.innerHTML = `
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/>
+                <line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+            <span>Simulate Schema Drift</span>
+        `;
         fetchAll();
     }
 }
 
-// ---------- UI & Formatting Helpers ----------
-
-function getStatusIcon(status) {
-    switch (status) {
-        case 'success': return '✅';
-        case 'validation_failed': return '❌';
-        case 'error': return '⚠️';
-        default: return '❓';
-    }
-}
-
-function getStatusClass(status) {
-    switch (status) {
-        case 'success': return 'success';
-        case 'validation_failed': return 'fail';
-        case 'error': return 'error';
-        default: return '';
-    }
-}
-
-function getStatusBadge(status) {
-    switch (status) {
-        case 'success': return '<span class="badge badge-success">Success</span>';
-        case 'validation_failed': return '<span class="badge badge-fail">Validation Failed</span>';
-        case 'error': return '<span class="badge badge-error">Error</span>';
-        default: return '';
-    }
-}
-
-/**
- * Normalizes dates to consistent "DD MMM YYYY" format (e.g. "18 Aug 2026").
- * Also cleans any rogue HTML tags like '<span class="dt">...</span>'.
- */
+// ---------- Formatting Helpers ----------
 function formatDateDisplay(dateStr) {
     if (!dateStr) return '—';
     const cleanStr = String(dateStr).replace(/<[^>]*>/g, '').trim();
     if (!cleanStr || cleanStr === '—') return '—';
 
-    // 1. Match DD/MM/YYYY or DD-MM-YYYY
     const ddmmyyyy = cleanStr.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
     if (ddmmyyyy) {
         const day = parseInt(ddmmyyyy[1], 10);
@@ -885,7 +923,6 @@ function formatDateDisplay(dateStr) {
         }
     }
 
-    // 2. Match YYYY-MM-DD or YYYY/MM/DD
     const yyyymmdd = cleanStr.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
     if (yyyymmdd) {
         const year = parseInt(yyyymmdd[1], 10);
@@ -897,7 +934,6 @@ function formatDateDisplay(dateStr) {
         }
     }
 
-    // 3. Fallback generic Date parse
     const genericDate = new Date(cleanStr);
     if (!isNaN(genericDate.getTime()) && genericDate.getFullYear() > 1990) {
         return genericDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -946,14 +982,8 @@ function formatTime(timestamp) {
     }
 }
 
-function formatPreview(preview) {
-    if (!preview) return '<span style="color:var(--text-muted)">No preview available</span>';
-    if (typeof preview === 'string') return escapeHtml(preview);
-    return escapeHtml(JSON.stringify(preview, null, 2));
-}
-
 function formatSnapshot(snapshot) {
-    if (!snapshot) return '<span style="color:var(--text-muted)">No data</span>';
+    if (!snapshot) return 'No snapshot data';
     if (typeof snapshot === 'string') {
         try {
             const parsed = JSON.parse(snapshot);
@@ -983,8 +1013,7 @@ function setText(id, text) {
     if (el) el.textContent = text;
 }
 
-// ---------- Toast Notifications ----------
-
+// ---------- Toasts ----------
 function showToast(message, type = 'info') {
     const container = document.getElementById('toast-container');
     if (!container) return;
@@ -993,34 +1022,32 @@ function showToast(message, type = 'info') {
     toast.className = `toast toast-${type}`;
     toast.setAttribute('role', 'status');
 
-    const icon = type === 'success' ? '✅' : type === 'error' ? '❌' : 'ℹ️';
-    toast.innerHTML = `<span aria-hidden="true">${icon}</span><span>${escapeHtml(message)}</span>`;
+    const icon = type === 'success' ? getSvgIcon('check-circle') : type === 'error' ? getSvgIcon('x-circle') : getSvgIcon('info');
+    toast.innerHTML = `${icon}<span>${escapeHtml(message)}</span>`;
 
     container.appendChild(toast);
 
-    // Auto-remove after 5 seconds
     setTimeout(() => {
-        toast.style.animation = 'toast-out 0.3s ease forwards';
-        setTimeout(() => toast.remove(), 300);
-    }, 5000);
+        toast.style.animation = 'toast-out 0.2s ease forwards';
+        setTimeout(() => toast.remove(), 200);
+    }, 4500);
 }
 
-// ---------- Data Export (CSV & JSON) ----------
-
+// ---------- Export Data ----------
 function exportData(format) {
     if (!cachedData || cachedData.length === 0) {
-        showToast('No scraped data available to export yet', 'error');
+        showToast('No dataset available to export yet', 'error');
         return;
     }
 
     const exportList = filteredData.length > 0 ? filteredData : cachedData;
     const dateStr = new Date().toISOString().split('T')[0];
-    const filename = `freejobalert-notifications-${dateStr}.${format}`;
+    const filename = `job-notifications-${dateStr}.${format}`;
 
     if (format === 'json') {
         const jsonStr = JSON.stringify(exportList, null, 2);
         downloadFile(jsonStr, filename, 'application/json');
-        showToast(`📥 Exported ${exportList.length} records to JSON`, 'success');
+        showToast(`Exported ${exportList.length} records to JSON`, 'success');
     } else if (format === 'csv') {
         const fields = ['post_date', 'recruitment_board', 'post_name', 'qualification', 'advt_no', 'last_date', 'detail_url'];
         const headers = ['Post Date', 'Recruitment Board', 'Post Name', 'Qualification', 'Advt No', 'Last Date', 'Detail URL'];
@@ -1035,7 +1062,7 @@ function exportData(format) {
         });
 
         downloadFile(csvContent, filename, 'text/csv;charset=utf-8;');
-        showToast(`📥 Exported ${exportList.length} records to CSV`, 'success');
+        showToast(`Exported ${exportList.length} records to CSV`, 'success');
     }
 }
 
